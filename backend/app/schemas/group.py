@@ -11,6 +11,10 @@ class GroupUpdate(BaseModel):
     name: str
 
 
+class GroupReorder(BaseModel):
+    group_ids: list[str]
+
+
 class GroupResponse(BaseModel):
     id: str
     user_id: str

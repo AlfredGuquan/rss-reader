@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle, PauseCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -42,9 +42,12 @@ export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) 
           />
         ) : null}
         <Rss className={cn('h-4 w-4 shrink-0 text-muted-foreground', feed.favicon_url && 'hidden')} />
-        <span className="min-w-0 flex-1 truncate">{feed.title}</span>
+        <span className={cn('min-w-0 flex-1 truncate', feed.status === 'paused' && 'opacity-60')}>{feed.title}</span>
         {feed.status === 'error' && (
           <AlertTriangle className="size-3.5 shrink-0 text-orange-500" title={`Feed has errors (${feed.error_count} failures)`} />
+        )}
+        {feed.status === 'paused' && (
+          <PauseCircle className="size-3.5 shrink-0 text-muted-foreground" title="Feed is paused" />
         )}
         {feed.unread_count > 0 && (
           <Badge variant="secondary" className="ml-auto h-5 min-w-5 justify-center px-1 text-xs">

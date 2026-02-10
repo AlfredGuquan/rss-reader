@@ -56,6 +56,22 @@ async def update_group(
     return group
 
 
+async def reorder_groups(
+    session: AsyncSession, user_id: str, group_ids: list[str]
+) -> list[Group]:
+    uid = uuid.UUID(user_id)
+    for idx, gid_str in enumerate(group_ids):
+        gid = uuid.UUID(gid_str)
+        result = await session.execute(
+            select(Group).where(and_(Group.id == gid, Group.user_id == uid))
+        )
+        group = result.scalar_one_or_none()
+        if group:
+            group.sort_order = idx
+    await session.commit()
+    return await get_groups(session, user_id)
+
+
 async def delete_group(
     session: AsyncSession, user_id: str, group_id: str
 ) -> bool:

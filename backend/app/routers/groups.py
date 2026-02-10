@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.schemas.group import GroupCreate, GroupUpdate, GroupResponse
+from app.schemas.group import GroupCreate, GroupUpdate, GroupReorder, GroupResponse
 from app.services import group_service
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -30,6 +30,13 @@ async def create_group(data: GroupCreate, db: AsyncSession = Depends(get_db)):
 async def list_groups(db: AsyncSession = Depends(get_db)):
     user_id = settings.default_user_id
     groups = await group_service.get_groups(db, user_id)
+    return [_group_to_response(g) for g in groups]
+
+
+@router.put("/reorder", response_model=list[GroupResponse])
+async def reorder_groups(data: GroupReorder, db: AsyncSession = Depends(get_db)):
+    user_id = settings.default_user_id
+    groups = await group_service.reorder_groups(db, user_id, data.group_ids)
     return [_group_to_response(g) for g in groups]
 
 

@@ -16,3 +16,7 @@ export function updateGroup(groupId: string, name: string): Promise<Group> {
 export function deleteGroup(groupId: string): Promise<void> {
   return apiClient.delete<void>(`/groups/${groupId}`);
 }
+
+export function reorderGroups(groupIds: string[]): Promise<Group[]> {
+  return apiClient.put<Group[]>('/groups/reorder', { group_ids: groupIds });
+}

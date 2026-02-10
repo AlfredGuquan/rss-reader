@@ -1,4 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FeedItem } from '@/components/sidebar/FeedItem';
 import { GroupItem } from '@/components/sidebar/GroupItem';
@@ -6,7 +20,7 @@ import { SidebarFooter } from '@/components/sidebar/SidebarFooter';
 import { EditFeedDialog } from '@/components/feed-management/EditFeedDialog';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useFeeds } from '@/hooks/queries/use-feeds';
-import { useGroups } from '@/hooks/queries/use-groups';
+import { useGroups, useReorderGroups } from '@/hooks/queries/use-groups';
 import { useUIStore } from '@/stores/ui-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -17,6 +31,7 @@ export function Sidebar() {
   const { data: groups, isLoading: groupsLoading } = useGroups();
   const selectedFeedId = useUIStore((s) => s.selectedFeedId);
   const setSelectedFeed = useUIStore((s) => s.setSelectedFeed);
+  const reorderGroups = useReorderGroups();
 
   const [editingFeed, setEditingFeed] = useState<Feed | null>(null);
 
@@ -46,6 +61,28 @@ export function Sidebar() {
     return [...groups].sort((a, b) => a.sort_order - b.sort_order);
   }, [groups]);
 
+  const groupIds = useMemo(() => sortedGroups.map((g) => g.id), [sortedGroups]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = groupIds.indexOf(String(active.id));
+      const newIndex = groupIds.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newOrder = arrayMove(groupIds, oldIndex, newIndex);
+      reorderGroups.mutate(newOrder);
+    },
+    [groupIds, reorderGroups]
+  );
+
   const hasContent = (groups && groups.length > 0) || (feeds && feeds.length > 0);
 
   return (
@@ -64,14 +101,24 @@ export function Sidebar() {
             </div>
           )}
 
-          {!isLoading && sortedGroups.map((group) => (
-            <GroupItem
-              key={group.id}
-              group={group}
-              feeds={groupedFeeds.get(group.id) ?? []}
-              onEditFeed={setEditingFeed}
-            />
-          ))}
+          {!isLoading && sortedGroups.length > 0 && (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={groupIds} strategy={verticalListSortingStrategy}>
+                {sortedGroups.map((group) => (
+                  <GroupItem
+                    key={group.id}
+                    group={group}
+                    feeds={groupedFeeds.get(group.id) ?? []}
+                    onEditFeed={setEditingFeed}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
 
           {!isLoading && sortedGroups.length > 0 && ungroupedFeeds.length > 0 && (
             <Separator className="my-2" />

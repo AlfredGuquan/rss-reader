@@ -29,6 +29,15 @@ export function importOpml(
   );
 }
 
+export interface DiscoveredFeed {
+  url: string;
+  title: string;
+}
+
+export function discoverFeeds(url: string): Promise<{ feeds: DiscoveredFeed[] }> {
+  return apiClient.get<{ feeds: DiscoveredFeed[] }>(`/feeds/discover?url=${encodeURIComponent(url)}`);
+}
+
 export function updateFeed(
   feedId: string,
   data: { title?: string; group_id?: string | null }
