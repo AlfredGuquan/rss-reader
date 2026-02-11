@@ -47,7 +47,7 @@ export function useUpdateFeed() {
       data,
     }: {
       feedId: string;
-      data: { title?: string; group_id?: string | null };
+      data: { title?: string; group_id?: string | null; status?: 'active' | 'paused' };
     }) => updateFeed(feedId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] });

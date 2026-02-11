@@ -137,6 +137,7 @@ async def update_feed(
     feed_id: str,
     title: str | None = None,
     group_id: str | None = None,
+    status: str | None = None,
 ) -> Feed | None:
     feed = await get_feed(session, user_id, feed_id)
     if not feed:
@@ -146,6 +147,11 @@ async def update_feed(
         feed.title = title
     if group_id is not None:
         feed.group_id = uuid.UUID(group_id) if group_id else None
+    if status is not None:
+        feed.status = status
+        if status == "active":
+            feed.error_count = 0
+            feed.last_error = None
 
     await session.commit()
     await session.refresh(feed)

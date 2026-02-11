@@ -40,7 +40,7 @@ export function discoverFeeds(url: string): Promise<{ feeds: DiscoveredFeed[] }>
 
 export function updateFeed(
   feedId: string,
-  data: { title?: string; group_id?: string | null }
+  data: { title?: string; group_id?: string | null; status?: 'active' | 'paused' }
 ): Promise<Feed> {
   return apiClient.put<Feed>(`/feeds/${feedId}`, data);
 }

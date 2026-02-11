@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -11,6 +11,14 @@ class FeedCreate(BaseModel):
 class FeedUpdate(BaseModel):
     title: Optional[str] = None
     group_id: Optional[str] = None
+    status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v is not None and v not in ("active", "paused"):
+            raise ValueError("status must be 'active' or 'paused'")
+        return v
 
 
 class FeedResponse(BaseModel):
@@ -27,6 +35,7 @@ class FeedResponse(BaseModel):
     status: str
     error_count: int
     unread_count: int = 0
+    feed_type: str = "rss"
     created_at: datetime
     updated_at: datetime
 

@@ -47,3 +47,15 @@ export function unstarEntry(entryId: string): Promise<{ success: boolean }> {
 export function markAllRead(params: { feed_id?: string; group_id?: string }): Promise<{ count: number }> {
   return apiClient.post<{ count: number }>('/entries/mark-all-read', params);
 }
+
+export function fetchEntryContent(entryId: string): Promise<{ success: boolean; content_fetched: boolean; has_content: boolean }> {
+  return apiClient.post<{ success: boolean; content_fetched: boolean; has_content: boolean }>(`/entries/${entryId}/fetch-content`);
+}
+
+export function searchEntries(params: { q: string; page?: number; per_page?: number }): Promise<PaginatedResponse<Entry>> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('q', params.q);
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.per_page) searchParams.set('per_page', String(params.per_page));
+  return apiClient.get<PaginatedResponse<Entry>>(`/entries/search?${searchParams.toString()}`);
+}

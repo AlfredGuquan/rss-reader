@@ -61,3 +61,9 @@ async def fetch_content_batch():
         count = await _fetch_batch(session)
         if count > 0:
             logger.info("Content fetch batch: %d entries processed", count)
+
+
+async def sync_all_newsletters():
+    """Sync all active email accounts."""
+    from app.services.email_service import sync_all_newsletters_task
+    await sync_all_newsletters_task()

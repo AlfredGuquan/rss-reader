@@ -115,6 +115,18 @@ async def mark_all_read(data: MarkAllReadRequest, db: AsyncSession = Depends(get
     return {"count": count}
 
 
+@router.get("/search", response_model=EntryListResponse)
+async def search_entries(
+    q: str = Query(min_length=1, max_length=200),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    user_id = settings.default_user_id
+    from app.services.search_service import search_entries as _search
+    return await _search(db, user_id, q, page, per_page)
+
+
 @router.get("/{entry_id}", response_model=EntryResponse)
 async def get_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
     user_id = settings.default_user_id
@@ -176,3 +188,25 @@ async def unstar_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Entry not found")
     return {"success": True}
+
+
+@router.post("/{entry_id}/fetch-content")
+async def fetch_entry_content(entry_id: str, db: AsyncSession = Depends(get_db)):
+    user_id = settings.default_user_id
+    result = await entry_service.get_entry(db, user_id, entry_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+
+    entry = result["entry"]
+    entry.content_fetched = False
+    await db.commit()
+
+    from app.services.content_service import fetch_content_for_entry
+    success = await fetch_content_for_entry(db, entry)
+
+    await db.refresh(entry)
+    return {
+        "success": success,
+        "content_fetched": entry.content_fetched,
+        "has_content": entry.content is not None,
+    }

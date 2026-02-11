@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { useUpdateFeed } from '@/hooks/queries/use-feeds';
 import { useGroups } from '@/hooks/queries/use-groups';
 import { useUIStore } from '@/stores/ui-store';
@@ -22,6 +23,7 @@ interface EditFeedDialogProps {
 export function EditFeedDialog({ open, onOpenChange, feed }: EditFeedDialogProps) {
   const [title, setTitle] = useState('');
   const [groupId, setGroupId] = useState<string>('');
+  const [paused, setPaused] = useState(false);
   const updateFeed = useUpdateFeed();
   const { data: groups } = useGroups();
   const setShortcutsEnabled = useUIStore((s) => s.setShortcutsEnabled);
@@ -30,6 +32,7 @@ export function EditFeedDialog({ open, onOpenChange, feed }: EditFeedDialogProps
     if (open && feed) {
       setTitle(feed.title);
       setGroupId(feed.group_id ?? '');
+      setPaused(feed.status === 'paused');
     }
   }, [open, feed]);
 
@@ -40,6 +43,7 @@ export function EditFeedDialog({ open, onOpenChange, feed }: EditFeedDialogProps
       data: {
         title: title.trim(),
         group_id: groupId || null,
+        status: paused ? 'paused' : 'active',
       },
     });
     onOpenChange(false);
@@ -50,6 +54,7 @@ export function EditFeedDialog({ open, onOpenChange, feed }: EditFeedDialogProps
     if (!nextOpen) {
       setTitle('');
       setGroupId('');
+      setPaused(false);
       updateFeed.reset();
     }
     onOpenChange(nextOpen);
@@ -94,6 +99,17 @@ export function EditFeedDialog({ open, onOpenChange, feed }: EditFeedDialogProps
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <label htmlFor="feed-paused" className="text-sm font-medium">
+              Pause feed
+            </label>
+            <Switch
+              id="feed-paused"
+              checked={paused}
+              onCheckedChange={setPaused}
+              disabled={updateFeed.isPending}
+            />
           </div>
           {updateFeed.isError && (
             <p className="text-sm text-destructive">{updateFeed.error.message}</p>

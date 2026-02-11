@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { ArticleContent } from './ArticleContent';
+import { Badge } from '@/components/ui/badge';
 import type { Entry } from '@/types';
 
 dayjs.extend(relativeTime);
@@ -25,6 +26,11 @@ export function ArticleView({ entry }: ArticleViewProps) {
         )}
         <span>·</span>
         <time>{dayjs(entry.published_at).format('YYYY-MM-DD HH:mm')}</time>
+        {!entry.content && entry.summary && (
+          <Badge variant="outline" className="ml-2 text-xs">
+            Summary only
+          </Badge>
+        )}
       </div>
       <div className="mt-6">
         <ArticleContent content={displayContent} />

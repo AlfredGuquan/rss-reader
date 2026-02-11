@@ -26,9 +26,10 @@ export function EntryListView({ entries }: EntryListViewProps) {
         {virtualizer.getVirtualItems().map((virtualRow) => (
           <div
             key={virtualRow.key}
+            data-index={virtualRow.index}
+            ref={virtualizer.measureElement}
             className="absolute left-0 top-0 w-full px-2"
             style={{
-              height: `${virtualRow.size}px`,
               transform: `translateY(${virtualRow.start}px)`,
             }}
           >

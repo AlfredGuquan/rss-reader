@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle, PauseCircle } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle, PauseCircle, PlayCircle, Mail } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -8,7 +8,7 @@ import {
 import type { Feed } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useDeleteFeed } from '@/hooks/queries/use-feeds';
+import { useDeleteFeed, useUpdateFeed } from '@/hooks/queries/use-feeds';
 
 interface FeedItemProps {
   feed: Feed;
@@ -19,6 +19,9 @@ interface FeedItemProps {
 
 export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) {
   const deleteFeed = useDeleteFeed();
+  const updateFeed = useUpdateFeed();
+
+  const FeedIcon = feed.feed_type === 'newsletter' ? Mail : Rss;
 
   return (
     <div className="group/feed flex items-center">
@@ -41,7 +44,7 @@ export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) 
             }}
           />
         ) : null}
-        <Rss className={cn('h-4 w-4 shrink-0 text-muted-foreground', feed.favicon_url && 'hidden')} />
+        <FeedIcon className={cn('h-4 w-4 shrink-0 text-muted-foreground', feed.favicon_url && 'hidden')} />
         <span className={cn('min-w-0 flex-1 truncate', feed.status === 'paused' && 'opacity-60')}>{feed.title}</span>
         {feed.status === 'error' && (
           <AlertTriangle className="size-3.5 shrink-0 text-orange-500" title={`Feed has errors (${feed.error_count} failures)`} />
@@ -68,6 +71,17 @@ export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) 
               Edit
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            onClick={() =>
+              updateFeed.mutate({
+                feedId: feed.id,
+                data: { status: feed.status === 'paused' ? 'active' : 'paused' },
+              })
+            }
+          >
+            {feed.status === 'paused' ? <PlayCircle /> : <PauseCircle />}
+            {feed.status === 'paused' ? 'Resume' : 'Pause'}
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onClick={() => deleteFeed.mutate(feed.id)}

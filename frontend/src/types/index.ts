@@ -12,6 +12,7 @@ export interface Feed {
   status: 'active' | 'error' | 'paused';
   error_count: number;
   unread_count: number;
+  feed_type: 'rss' | 'newsletter';
   created_at: string;
   updated_at: string;
 }

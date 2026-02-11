@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, FileUp, FolderPlus, Rss } from 'lucide-react';
+import { Plus, FileUp, FolderPlus, Rss, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,11 +10,13 @@ import {
 import { AddFeedDialog } from '@/components/feed-management/AddFeedDialog';
 import { ImportOpmlDialog } from '@/components/feed-management/ImportOpmlDialog';
 import { CreateGroupDialog } from '@/components/group-management/CreateGroupDialog';
+import { ConnectEmailDialog } from '@/components/feed-management/ConnectEmailDialog';
 
 export function SidebarFooter() {
   const [addFeedOpen, setAddFeedOpen] = useState(false);
   const [importOpmlOpen, setImportOpmlOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [connectEmailOpen, setConnectEmailOpen] = useState(false);
 
   return (
     <div className="border-t p-2">
@@ -38,12 +40,17 @@ export function SidebarFooter() {
             <FolderPlus />
             Create Group
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setConnectEmailOpen(true)}>
+            <Mail />
+            Connect Email
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       <AddFeedDialog open={addFeedOpen} onOpenChange={setAddFeedOpen} />
       <ImportOpmlDialog open={importOpmlOpen} onOpenChange={setImportOpmlOpen} />
       <CreateGroupDialog open={createGroupOpen} onOpenChange={setCreateGroupOpen} />
+      <ConnectEmailDialog open={connectEmailOpen} onOpenChange={setConnectEmailOpen} />
     </div>
   );
 }

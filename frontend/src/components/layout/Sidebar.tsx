@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -13,7 +13,9 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable';
+import { Search } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { FeedItem } from '@/components/sidebar/FeedItem';
 import { GroupItem } from '@/components/sidebar/GroupItem';
 import { SidebarFooter } from '@/components/sidebar/SidebarFooter';
@@ -31,9 +33,18 @@ export function Sidebar() {
   const { data: groups, isLoading: groupsLoading } = useGroups();
   const selectedFeedId = useUIStore((s) => s.selectedFeedId);
   const setSelectedFeed = useUIStore((s) => s.setSelectedFeed);
+  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const reorderGroups = useReorderGroups();
 
   const [editingFeed, setEditingFeed] = useState<Feed | null>(null);
+  const [localSearch, setLocalSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(localSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localSearch, setSearchQuery]);
 
   const isLoading = feedsLoading || groupsLoading;
 
@@ -90,6 +101,17 @@ export function Sidebar() {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h1 className="text-sm font-semibold">Feeds</h1>
         <ThemeToggle />
+      </div>
+      <div className="border-b px-3 py-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search articles..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="h-8 pl-8 text-sm"
+          />
+        </div>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2">

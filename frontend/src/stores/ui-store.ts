@@ -11,6 +11,7 @@ interface UIState {
   sidebarCollapsed: boolean;
   shortcutsEnabled: boolean;
   entryIds: string[];
+  searchQuery: string;
 
   setSelectedFeed: (feedId: string | null) => void;
   setSelectedGroup: (groupId: string | null) => void;
@@ -20,6 +21,7 @@ interface UIState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setShortcutsEnabled: (enabled: boolean) => void;
   setEntryIds: (ids: string[]) => void;
+  setSearchQuery: (query: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -31,6 +33,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
   shortcutsEnabled: true,
   entryIds: [],
+  searchQuery: '',
 
   setSelectedFeed: (feedId) =>
     set({ selectedFeedId: feedId, selectedGroupId: null, selectedEntryId: null }),
@@ -48,4 +51,5 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setShortcutsEnabled: (enabled) => set({ shortcutsEnabled: enabled }),
   setEntryIds: (ids) => set({ entryIds: ids }),
+  setSearchQuery: (query) => set({ searchQuery: query, selectedEntryId: null }),
 }));

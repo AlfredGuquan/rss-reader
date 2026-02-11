@@ -8,6 +8,8 @@ import {
   starEntry,
   unstarEntry,
   markAllRead,
+  fetchEntryContent,
+  searchEntries,
 } from '@/api/entries';
 import type { GetEntriesParams } from '@/api/entries';
 
@@ -80,5 +82,24 @@ export function useMarkAllRead() {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
     },
+  });
+}
+
+export function useFetchContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fetchEntryContent,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entry'] });
+    },
+  });
+}
+
+export function useSearchEntries(query: string) {
+  return useQuery({
+    queryKey: ['search-entries', query],
+    queryFn: () => searchEntries({ q: query }),
+    enabled: query.length > 0,
   });
 }
