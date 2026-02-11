@@ -199,28 +199,45 @@ def _get_gmail_credentials(account: EmailAccount) -> Credentials:
     return creds
 
 
-def _extract_html_from_payload(payload: dict) -> str:
-    """Recursively extract HTML body from Gmail API message payload."""
+def _extract_with_preference(payload: dict) -> tuple[str, bool]:
+    """Recursively extract body from Gmail payload, returning (content, is_html).
+
+    Collects all candidates from MIME parts and prefers HTML over plain text,
+    fixing the bug where text/plain in multipart/alternative was returned early.
+    """
     mime_type = payload.get("mimeType", "")
 
     if mime_type == "text/html":
         data = payload.get("body", {}).get("data", "")
         if data:
-            return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+            return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace"), True
 
     parts = payload.get("parts", [])
-    for part in parts:
-        result = _extract_html_from_payload(part)
-        if result:
-            return result
+    if parts:
+        html_candidates: list[str] = []
+        plain_candidates: list[str] = []
+        for part in parts:
+            result, is_html = _extract_with_preference(part)
+            if result:
+                (html_candidates if is_html else plain_candidates).append(result)
+        if html_candidates:
+            return html_candidates[0], True
+        if plain_candidates:
+            return plain_candidates[0], False
 
     if mime_type == "text/plain":
         data = payload.get("body", {}).get("data", "")
         if data:
             text = base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
-            return f"<pre>{text}</pre>"
+            return f"<pre>{text}</pre>", False
 
-    return ""
+    return "", False
+
+
+def _extract_html_from_payload(payload: dict) -> str:
+    """Recursively extract HTML body from Gmail API message payload."""
+    content, _ = _extract_with_preference(payload)
+    return content
 
 
 def _extract_cid_images(payload: dict, service, user_id: str, message_id: str) -> dict[str, str]:
@@ -408,6 +425,66 @@ async def sync_newsletters(session: AsyncSession, account: EmailAccount) -> int:
 
     logger.info("Synced %d new newsletters for %s", new_count, account.email_address)
     return new_count
+
+
+async def refetch_plain_text_entries(session: AsyncSession, account: EmailAccount) -> int:
+    """Re-fetch HTML for entries stored as plain text <pre> blocks."""
+    import asyncio
+
+    result = await session.execute(
+        select(Entry)
+        .join(Feed, Entry.feed_id == Feed.id)
+        .where(
+            and_(
+                Feed.email_account_id == account.id,
+                Feed.feed_type == "newsletter",
+                Entry.content.like("<pre>%"),
+            )
+        )
+    )
+    entries = list(result.scalars().all())
+    if not entries:
+        return 0
+
+    def _refetch_from_gmail(message_ids: list[str]) -> dict[str, str]:
+        creds = _get_gmail_credentials(account)
+        service = build("gmail", "v1", credentials=creds)
+        results = {}
+        for msg_id in message_ids:
+            try:
+                search = service.users().messages().list(
+                    userId="me", q=f"rfc822msgid:{msg_id}", maxResults=1
+                ).execute()
+                refs = search.get("messages", [])
+                if not refs:
+                    continue
+                msg = service.users().messages().get(
+                    userId="me", id=refs[0]["id"], format="full"
+                ).execute()
+                payload = msg.get("payload", {})
+                html_body = _extract_html_from_payload(payload)
+                if html_body and not html_body.startswith("<pre>"):
+                    cid_map = _extract_cid_images(payload, service, "me", refs[0]["id"])
+                    if cid_map:
+                        html_body = _replace_cid_references(html_body, cid_map)
+                    html_body = _sanitize_email_html(html_body)
+                    results[msg_id] = html_body
+            except Exception as exc:
+                logger.warning("Failed to refetch message %s: %s", msg_id, exc)
+        return results
+
+    message_ids = [e.guid for e in entries]
+    updated_html = await asyncio.to_thread(_refetch_from_gmail, message_ids)
+
+    updated_count = 0
+    for entry in entries:
+        if entry.guid in updated_html:
+            entry.content = updated_html[entry.guid]
+            updated_count += 1
+
+    await session.commit()
+    logger.info("Refetched %d/%d plain-text entries for %s", updated_count, len(entries), account.email_address)
+    return updated_count
 
 
 async def sync_all_newsletters_task():

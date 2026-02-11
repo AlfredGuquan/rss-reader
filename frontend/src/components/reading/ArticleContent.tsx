@@ -28,16 +28,18 @@ export function ArticleContent({ content }: ArticleContentProps) {
 
   useEffect(() => {
     if (contentRef.current) {
-      contentRef.current.querySelectorAll('pre code').forEach((block) => {
+      contentRef.current.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
         hljs.highlightElement(block as HTMLElement);
       });
     }
   }, [content]);
 
+  const isPlainText = content.trimStart().startsWith('<pre>');
+
   return (
     <div
       ref={contentRef}
-      className="prose prose-sm dark:prose-invert max-w-none [&_table]:!table-auto [&_td]:!p-0 [&_th]:!p-0 [&_img]:!m-0 [&_table]:!w-auto"
+      className={`prose prose-sm dark:prose-invert max-w-none [&_table]:!table-auto [&_td]:!p-0 [&_th]:!p-0 [&_img]:!m-0 [&_table]:!w-auto${isPlainText ? ' email-plaintext' : ''}`}
       dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
     />
   );

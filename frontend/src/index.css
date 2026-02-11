@@ -123,3 +123,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+.email-plaintext pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  border: none;
+}

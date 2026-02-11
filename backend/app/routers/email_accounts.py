@@ -76,3 +76,15 @@ async def sync_email(account_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Email account not found")
     count = await email_service.sync_newsletters(db, account)
     return {"new_entries": count}
+
+
+@router.post("/{account_id}/refetch")
+async def refetch_email(account_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-fetch HTML for entries that were stored as plain text."""
+    user_id = settings.default_user_id
+    accounts = await email_service.get_email_accounts(db, user_id)
+    account = next((a for a in accounts if str(a.id) == account_id), None)
+    if not account:
+        raise HTTPException(status_code=404, detail="Email account not found")
+    count = await email_service.refetch_plain_text_entries(db, account)
+    return {"updated_entries": count}
