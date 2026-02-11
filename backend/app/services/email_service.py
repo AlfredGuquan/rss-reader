@@ -1,18 +1,24 @@
-"""Newsletter IMAP aggregation service for Gmail."""
+"""Gmail OAuth newsletter aggregation service."""
 
-import asyncio
-import email
-import imaplib
+import base64
+import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
-from email.header import decode_header
+from email.utils import parsedate_to_datetime
 from typing import Optional
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from app.config import settings
 from app.models.email_account import EmailAccount
 from app.models.entry import Entry
 from app.models.feed import Feed
@@ -20,63 +26,78 @@ from app.models.group import Group
 
 logger = logging.getLogger(__name__)
 
-
-def _decode_header_value(value: str) -> str:
-    """Decode RFC 2047 encoded header."""
-    if not value:
-        return ""
-    decoded_parts = decode_header(value)
-    result = []
-    for part, charset in decoded_parts:
-        if isinstance(part, bytes):
-            result.append(part.decode(charset or "utf-8", errors="replace"))
-        else:
-            result.append(part)
-    return "".join(result)
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 
-async def test_connection(
-    email_address: str,
-    app_password: str,
-    imap_host: str = "imap.gmail.com",
-    imap_port: int = 993,
-) -> tuple[bool, str]:
-    """Test IMAP connection. Returns (success, message)."""
-    def _connect():
-        mail = imaplib.IMAP4_SSL(imap_host, imap_port)
-        mail.login(email_address, app_password)
-        mail.logout()
-        return True
-
-    try:
-        await asyncio.to_thread(_connect)
-        return True, "Connection successful"
-    except Exception as exc:
-        return False, str(exc)
+def get_oauth_flow() -> Flow:
+    """Create OAuth flow from credentials file."""
+    flow = Flow.from_client_secrets_file(
+        settings.google_oauth_credentials_path,
+        scopes=SCOPES,
+        redirect_uri=settings.google_oauth_redirect_uri,
+    )
+    return flow
 
 
-async def create_email_account(
+def get_auth_url() -> str:
+    """Generate Google OAuth authorization URL."""
+    flow = get_oauth_flow()
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+    )
+    return auth_url
+
+
+async def handle_oauth_callback(
     session: AsyncSession,
     user_id: str,
-    data: dict,
+    code: str,
+    gmail_label: str = "Newsletters",
 ) -> EmailAccount:
-    """Create email account after verifying connection."""
-    success, msg = await test_connection(
-        data["email_address"],
-        data["app_password"],
-        data.get("imap_host", "imap.gmail.com"),
-        data.get("imap_port", 993),
+    """Exchange auth code for tokens, create or update EmailAccount."""
+    import asyncio
+
+    def _exchange_code():
+        flow = get_oauth_flow()
+        flow.fetch_token(code=code)
+        return flow.credentials
+
+    credentials = await asyncio.to_thread(_exchange_code)
+
+    def _get_email(creds):
+        service = build("gmail", "v1", credentials=creds)
+        profile = service.users().getProfile(userId="me").execute()
+        return profile["emailAddress"]
+
+    email_address = await asyncio.to_thread(_get_email, credentials)
+
+    uid = uuid.UUID(user_id)
+    result = await session.execute(
+        select(EmailAccount).where(
+            and_(EmailAccount.user_id == uid, EmailAccount.email_address == email_address)
+        )
     )
-    if not success:
-        raise ValueError(f"Connection failed: {msg}")
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.oauth_refresh_token = credentials.refresh_token or existing.oauth_refresh_token
+        existing.oauth_access_token = credentials.token
+        existing.oauth_token_expires_at = credentials.expiry
+        existing.gmail_label = gmail_label
+        existing.is_active = True
+        existing.last_error = None
+        await session.commit()
+        await session.refresh(existing)
+        return existing
 
     account = EmailAccount(
-        user_id=uuid.UUID(user_id),
-        email_address=data["email_address"],
-        app_password=data["app_password"],
-        imap_host=data.get("imap_host", "imap.gmail.com"),
-        imap_port=data.get("imap_port", 993),
-        label=data.get("label", "Newsletters"),
+        user_id=uid,
+        email_address=email_address,
+        oauth_refresh_token=credentials.refresh_token,
+        oauth_access_token=credentials.token,
+        oauth_token_expires_at=credentials.expiry,
+        gmail_label=gmail_label,
     )
     session.add(account)
     await session.commit()
@@ -158,68 +179,176 @@ async def _get_or_create_newsletter_feed(
     return feed
 
 
-def _extract_html_body(msg: email.message.Message) -> str:
-    """Extract HTML body from email message."""
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            if content_type == "text/html":
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or "utf-8"
-                return payload.decode(charset, errors="replace")
-        for part in msg.walk():
-            if part.get_content_type() == "text/plain":
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or "utf-8"
-                return payload.decode(charset, errors="replace")
-    else:
-        payload = msg.get_payload(decode=True)
-        charset = msg.get_content_charset() or "utf-8"
-        return payload.decode(charset, errors="replace") if payload else ""
+def _get_gmail_credentials(account: EmailAccount) -> Credentials:
+    """Build Credentials object from stored tokens, auto-refresh if expired."""
+    with open(settings.google_oauth_credentials_path) as f:
+        client_config = json.load(f)["installed"]
+
+    creds = Credentials(
+        token=account.oauth_access_token,
+        refresh_token=account.oauth_refresh_token,
+        token_uri=client_config["token_uri"],
+        client_id=client_config["client_id"],
+        client_secret=client_config["client_secret"],
+        scopes=SCOPES,
+    )
+
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+
+    return creds
+
+
+def _extract_html_from_payload(payload: dict) -> str:
+    """Recursively extract HTML body from Gmail API message payload."""
+    mime_type = payload.get("mimeType", "")
+
+    if mime_type == "text/html":
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+
+    parts = payload.get("parts", [])
+    for part in parts:
+        result = _extract_html_from_payload(part)
+        if result:
+            return result
+
+    if mime_type == "text/plain":
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            text = base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+            return f"<pre>{text}</pre>"
+
     return ""
 
 
-def _parse_sender(from_header: str) -> tuple[str, str]:
+def _extract_cid_images(payload: dict, service, user_id: str, message_id: str) -> dict[str, str]:
+    """Extract CID-referenced inline images from message parts."""
+    cid_map = {}
+    parts = payload.get("parts", [])
+
+    for part in parts:
+        headers = {h["name"].lower(): h["value"] for h in part.get("headers", [])}
+        content_id = headers.get("content-id", "")
+        mime_type = part.get("mimeType", "")
+
+        if content_id and mime_type.startswith("image/"):
+            cid = content_id.strip("<>")
+            attachment_id = part.get("body", {}).get("attachmentId")
+
+            if attachment_id:
+                attachment = service.users().messages().attachments().get(
+                    userId=user_id, messageId=message_id, id=attachment_id
+                ).execute()
+                data = attachment.get("data", "")
+                if data:
+                    cid_map[cid] = f"data:{mime_type};base64,{data}"
+
+        nested = _extract_cid_images(part, service, user_id, message_id)
+        cid_map.update(nested)
+
+    return cid_map
+
+
+def _replace_cid_references(html: str, cid_map: dict[str, str]) -> str:
+    """Replace cid:xxx references in HTML with data URIs."""
+    for cid, data_uri in cid_map.items():
+        html = html.replace(f"cid:{cid}", data_uri)
+    return html
+
+
+def _sanitize_email_html(html: str) -> str:
+    """Remove dangerous elements from email HTML while preserving layout."""
+    html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'\s+on\w+\s*=\s*"[^"]*"', "", html, flags=re.IGNORECASE)
+    html = re.sub(r"\s+on\w+\s*=\s*'[^']*'", "", html, flags=re.IGNORECASE)
+    html = re.sub(
+        r'<img[^>]*(?:width\s*=\s*["\']?1["\']?\s+height\s*=\s*["\']?1["\']?|height\s*=\s*["\']?1["\']?\s+width\s*=\s*["\']?1["\']?)[^>]*/?>',
+        "", html, flags=re.IGNORECASE
+    )
+    return html
+
+
+def _parse_sender_from_header(from_header: str) -> tuple[str, str]:
     """Parse From header into (name, email)."""
-    decoded = _decode_header_value(from_header)
-    if "<" in decoded and ">" in decoded:
-        name = decoded.split("<")[0].strip().strip('"')
-        addr = decoded.split("<")[1].split(">")[0].strip()
+    if "<" in from_header and ">" in from_header:
+        name = from_header.split("<")[0].strip().strip('"')
+        addr = from_header.split("<")[1].split(">")[0].strip()
         return name, addr
-    return "", decoded.strip()
+    return "", from_header.strip()
 
 
 async def sync_newsletters(session: AsyncSession, account: EmailAccount) -> int:
-    """Sync newsletters from IMAP. Returns count of new entries."""
+    """Sync newsletters from Gmail API. Returns count of new entries."""
+    import asyncio
+
     uid = account.user_id
 
-    def _fetch_emails():
-        mail = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
-        mail.login(account.email_address, account.app_password)
+    def _fetch_from_gmail():
+        creds = _get_gmail_credentials(account)
+        service = build("gmail", "v1", credentials=creds)
 
-        status, _ = mail.select(f'"{account.label}"')
-        if status != "OK":
-            mail.select("INBOX")
+        updated_tokens = None
+        if creds.token != account.oauth_access_token:
+            updated_tokens = {
+                "access_token": creds.token,
+                "expires_at": creds.expiry,
+            }
+
+        # Resolve label name to label ID (required for nested labels like "Cora/Newsletter")
+        label_id = None
+        labels_response = service.users().labels().list(userId="me").execute()
+        for lbl in labels_response.get("labels", []):
+            if lbl["name"] == account.gmail_label:
+                label_id = lbl["id"]
+                break
 
         since_date = account.last_synced_at or (datetime.utcnow() - timedelta(days=7))
-        date_str = since_date.strftime("%d-%b-%Y")
-        _, message_numbers = mail.search(None, f'(SINCE "{date_str}")')
+        date_str = since_date.strftime("%Y/%m/%d")
+        date_query = f"after:{date_str}"
 
-        messages = []
-        for num in message_numbers[0].split():
-            if not num:
-                continue
-            _, msg_data = mail.fetch(num, "(RFC822)")
-            if msg_data[0] is None:
-                continue
-            raw_email = msg_data[0][1]
-            messages.append(raw_email)
+        messages_data = []
+        list_kwargs = {"userId": "me", "q": date_query, "maxResults": 50}
+        if label_id:
+            list_kwargs["labelIds"] = [label_id]
+        result = service.users().messages().list(**list_kwargs).execute()
+        message_refs = result.get("messages", [])
 
-        mail.logout()
-        return messages
+        for msg_ref in message_refs:
+            msg = service.users().messages().get(
+                userId="me", id=msg_ref["id"], format="full"
+            ).execute()
+
+            payload = msg.get("payload", {})
+            headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+
+            html_body = _extract_html_from_payload(payload)
+
+            cid_map = _extract_cid_images(payload, service, "me", msg_ref["id"])
+            if cid_map and html_body:
+                html_body = _replace_cid_references(html_body, cid_map)
+
+            if html_body:
+                html_body = _sanitize_email_html(html_body)
+
+            messages_data.append({
+                "message_id": headers.get("message-id", msg_ref["id"]),
+                "from": headers.get("from", ""),
+                "subject": headers.get("subject", "No Subject"),
+                "date": headers.get("date", ""),
+                "html_body": html_body,
+            })
+
+        return messages_data, updated_tokens
 
     try:
-        raw_messages = await asyncio.to_thread(_fetch_emails)
+        messages_data, updated_tokens = await asyncio.to_thread(_fetch_from_gmail)
+
+        if updated_tokens:
+            account.oauth_access_token = updated_tokens["access_token"]
+            account.oauth_token_expires_at = updated_tokens["expires_at"]
     except Exception as exc:
         account.last_error = str(exc)
         await session.commit()
@@ -229,20 +358,18 @@ async def sync_newsletters(session: AsyncSession, account: EmailAccount) -> int:
     group = await _get_or_create_newsletters_group(session, uid)
     new_count = 0
 
-    for raw in raw_messages:
+    for msg_data in messages_data:
         try:
-            msg = email.message_from_bytes(raw)
-            message_id = msg.get("Message-ID", "")
+            message_id = msg_data["message_id"]
             if not message_id:
                 continue
 
-            sender_name, sender_email_addr = _parse_sender(msg.get("From", ""))
-            subject = _decode_header_value(msg.get("Subject", "No Subject"))
+            sender_name, sender_email_addr = _parse_sender_from_header(msg_data["from"])
+            subject = msg_data["subject"]
 
-            date_header = msg.get("Date", "")
+            date_str = msg_data["date"]
             try:
-                from email.utils import parsedate_to_datetime
-                published_at = parsedate_to_datetime(date_header)
+                published_at = parsedate_to_datetime(date_str)
                 published_at = published_at.replace(tzinfo=None)
             except Exception:
                 published_at = datetime.utcnow()
@@ -251,17 +378,7 @@ async def sync_newsletters(session: AsyncSession, account: EmailAccount) -> int:
                 session, uid, sender_email_addr, sender_name, group.id, account.id
             )
 
-            html_body = _extract_html_body(msg)
-            content = None
-            if html_body:
-                try:
-                    import trafilatura
-                    content = await asyncio.to_thread(
-                        trafilatura.extract, html_body,
-                        include_links=True, include_images=True, output_format="html",
-                    )
-                except Exception:
-                    content = html_body
+            content = msg_data["html_body"]
 
             stmt = (
                 sqlite_insert(Entry)

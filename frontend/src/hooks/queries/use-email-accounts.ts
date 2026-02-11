@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getEmailAccounts,
-  connectEmail,
+  initOAuth,
+  handleOAuthCallback,
   disconnectEmail,
   syncEmail,
-  testEmailConnection,
 } from '@/api/email-accounts';
 
 export function useEmailAccounts() {
@@ -14,10 +14,16 @@ export function useEmailAccounts() {
   });
 }
 
-export function useConnectEmail() {
+export function useInitOAuth() {
+  return useMutation({
+    mutationFn: initOAuth,
+  });
+}
+
+export function useOAuthCallback() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: connectEmail,
+    mutationFn: handleOAuthCallback,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['email-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
@@ -44,11 +50,5 @@ export function useSyncEmail() {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
     },
-  });
-}
-
-export function useTestConnection() {
-  return useMutation({
-    mutationFn: testEmailConnection,
   });
 }

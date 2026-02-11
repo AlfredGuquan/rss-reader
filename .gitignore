@@ -24,5 +24,8 @@ dist/
 .env
 .env.local
 
+# OAuth credentials
+backend/config/
+
 # Generated assets
 assets/

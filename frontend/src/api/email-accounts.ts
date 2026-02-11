@@ -3,9 +3,7 @@ import { apiClient } from './client';
 export interface EmailAccount {
   id: string;
   email_address: string;
-  imap_host: string;
-  imap_port: number;
-  label: string;
+  gmail_label: string;
   is_active: boolean;
   last_synced_at: string | null;
   last_error: string | null;
@@ -13,20 +11,25 @@ export interface EmailAccount {
   updated_at: string;
 }
 
-export interface ConnectEmailRequest {
-  email_address: string;
-  app_password: string;
-  imap_host?: string;
-  imap_port?: number;
-  label?: string;
+export interface OAuthInitResponse {
+  auth_url: string;
+}
+
+export interface OAuthCallbackRequest {
+  code: string;
+  gmail_label?: string;
 }
 
 export function getEmailAccounts(): Promise<EmailAccount[]> {
   return apiClient.get<EmailAccount[]>('/email-accounts');
 }
 
-export function connectEmail(data: ConnectEmailRequest): Promise<EmailAccount> {
-  return apiClient.post<EmailAccount>('/email-accounts', data);
+export function initOAuth(): Promise<OAuthInitResponse> {
+  return apiClient.post<OAuthInitResponse>('/email-accounts/oauth/init');
+}
+
+export function handleOAuthCallback(data: OAuthCallbackRequest): Promise<EmailAccount> {
+  return apiClient.post<EmailAccount>('/email-accounts/oauth/callback', data);
 }
 
 export function disconnectEmail(accountId: string): Promise<void> {
@@ -35,13 +38,4 @@ export function disconnectEmail(accountId: string): Promise<void> {
 
 export function syncEmail(accountId: string): Promise<{ new_entries: number }> {
   return apiClient.post<{ new_entries: number }>(`/email-accounts/${accountId}/sync`);
-}
-
-export function testEmailConnection(data: {
-  email_address: string;
-  app_password: string;
-  imap_host?: string;
-  imap_port?: number;
-}): Promise<{ success: boolean; message: string }> {
-  return apiClient.post<{ success: boolean; message: string }>('/email-accounts/test', data);
 }

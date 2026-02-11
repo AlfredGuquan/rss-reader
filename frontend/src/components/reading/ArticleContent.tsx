@@ -37,7 +37,7 @@ export function ArticleContent({ content }: ArticleContentProps) {
   return (
     <div
       ref={contentRef}
-      className="prose prose-sm dark:prose-invert max-w-none"
+      className="prose prose-sm dark:prose-invert max-w-none [&_table]:!table-auto [&_td]:!p-0 [&_th]:!p-0 [&_img]:!m-0 [&_table]:!w-auto"
       dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
     />
   );

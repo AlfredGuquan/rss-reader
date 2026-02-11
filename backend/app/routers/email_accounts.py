@@ -4,30 +4,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.schemas.email_account import (
-    EmailAccountCreate,
     EmailAccountResponse,
-    TestConnectionRequest,
+    OAuthCallbackRequest,
+    OAuthInitResponse,
 )
 from app.services import email_service
 
 router = APIRouter(prefix="/api/email-accounts", tags=["email-accounts"])
 
 
-@router.post("", response_model=EmailAccountResponse, status_code=201)
-async def connect_email(data: EmailAccountCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/oauth/init", response_model=OAuthInitResponse)
+async def oauth_init():
+    auth_url = email_service.get_auth_url()
+    return OAuthInitResponse(auth_url=auth_url)
+
+
+@router.post("/oauth/callback", response_model=EmailAccountResponse)
+async def oauth_callback(data: OAuthCallbackRequest, db: AsyncSession = Depends(get_db)):
     user_id = settings.default_user_id
     try:
-        account = await email_service.create_email_account(
-            db, user_id, data.model_dump()
+        account = await email_service.handle_oauth_callback(
+            db, user_id, data.code, data.gmail_label
         )
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return EmailAccountResponse(
         id=str(account.id),
         email_address=account.email_address,
-        imap_host=account.imap_host,
-        imap_port=account.imap_port,
-        label=account.label,
+        gmail_label=account.gmail_label,
         is_active=account.is_active,
         last_synced_at=account.last_synced_at,
         last_error=account.last_error,
@@ -44,9 +48,7 @@ async def list_email_accounts(db: AsyncSession = Depends(get_db)):
         EmailAccountResponse(
             id=str(a.id),
             email_address=a.email_address,
-            imap_host=a.imap_host,
-            imap_port=a.imap_port,
-            label=a.label,
+            gmail_label=a.gmail_label,
             is_active=a.is_active,
             last_synced_at=a.last_synced_at,
             last_error=a.last_error,
@@ -74,11 +76,3 @@ async def sync_email(account_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Email account not found")
     count = await email_service.sync_newsletters(db, account)
     return {"new_entries": count}
-
-
-@router.post("/test")
-async def test_connection(data: TestConnectionRequest):
-    success, message = await email_service.test_connection(
-        data.email_address, data.app_password, data.imap_host, data.imap_port
-    )
-    return {"success": success, "message": message}
