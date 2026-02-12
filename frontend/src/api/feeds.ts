@@ -44,3 +44,33 @@ export function updateFeed(
 ): Promise<Feed> {
   return apiClient.put<Feed>(`/feeds/${feedId}`, data);
 }
+
+export interface OpmlPreviewFeed {
+  title: string;
+  url: string;
+  site_url: string | null;
+  group: string | null;
+  status: 'new' | 'duplicate';
+}
+
+export interface OpmlPreviewGroup {
+  name: string;
+  feed_count: number;
+  is_new: boolean;
+}
+
+export interface OpmlPreviewResult {
+  groups: OpmlPreviewGroup[];
+  feeds: OpmlPreviewFeed[];
+  summary: { total: number; new: number; duplicate: number };
+}
+
+export function previewOpml(file: File): Promise<OpmlPreviewResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiClient.upload<OpmlPreviewResult>('/feeds/preview-opml', formData);
+}
+
+export function exportOpml(): void {
+  window.open('/api/feeds/export-opml', '_blank');
+}

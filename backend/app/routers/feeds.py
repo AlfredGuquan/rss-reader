@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -37,14 +38,112 @@ async def discover_feed(url: str):
     return FeedDiscoverResponse(feeds=feeds)
 
 
+@router.get("/export-opml")
+async def export_opml(db: AsyncSession = Depends(get_db)):
+    """Export all feeds as OPML 2.0 XML."""
+    from app.services.opml_service import generate_opml
+    from app.services.group_service import get_groups
+
+    user_id = settings.default_user_id
+    feed_results = await feed_service.get_feeds(db, user_id)
+    groups = await get_groups(db, user_id)
+    group_name_map = {str(g.id): g.name for g in groups}
+
+    feeds_with_groups = []
+    for r in feed_results:
+        feed = r["feed"]
+        group_name = group_name_map.get(str(feed.group_id)) if feed.group_id else None
+        feeds_with_groups.append({"feed": feed, "group_name": group_name})
+
+    xml_content = generate_opml(feeds_with_groups)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={"Content-Disposition": "attachment; filename=subscriptions.opml"},
+    )
+
+
+@router.post("/preview-opml")
+async def preview_opml(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Parse an OPML file and return a preview of feeds to import."""
+    from app.services.opml_service import parse_opml
+    from sqlalchemy import select
+    from app.models.feed import Feed as FeedModel
+    import uuid
+
+    user_id = settings.default_user_id
+    uid = uuid.UUID(user_id)
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("utf-8", errors="replace")
+
+    opml_feeds = parse_opml(text)
+
+    existing_result = await db.execute(
+        select(FeedModel.url).where(FeedModel.user_id == uid)
+    )
+    existing_urls = {row[0] for row in existing_result.all()}
+
+    from app.services.group_service import get_groups
+    existing_groups = await get_groups(db, user_id)
+    existing_group_names = {g.name for g in existing_groups}
+
+    feeds_preview = []
+    group_feed_counts: dict[str, dict] = {}
+    new_count = 0
+    duplicate_count = 0
+
+    for opml_feed in opml_feeds:
+        is_dup = opml_feed.url in existing_urls
+        status = "duplicate" if is_dup else "new"
+        if is_dup:
+            duplicate_count += 1
+        else:
+            new_count += 1
+
+        feeds_preview.append({
+            "title": opml_feed.title,
+            "url": opml_feed.url,
+            "site_url": opml_feed.site_url,
+            "group": opml_feed.group,
+            "status": status,
+        })
+
+        if opml_feed.group:
+            if opml_feed.group not in group_feed_counts:
+                group_feed_counts[opml_feed.group] = {
+                    "name": opml_feed.group,
+                    "feed_count": 0,
+                    "is_new": opml_feed.group not in existing_group_names,
+                }
+            group_feed_counts[opml_feed.group]["feed_count"] += 1
+
+    return {
+        "groups": list(group_feed_counts.values()),
+        "feeds": feeds_preview,
+        "summary": {
+            "total": len(opml_feeds),
+            "new": new_count,
+            "duplicate": duplicate_count,
+        },
+    }
+
+
 @router.post("/import-opml")
 async def import_opml(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Import feeds from an OPML file using batch creation (no HTTP fetching)."""
+    from app.services.opml_service import parse_opml, create_feed_from_opml
+    from app.services.group_service import create_group, get_groups
+
     user_id = settings.default_user_id
     content = await file.read()
-    text = content.decode("utf-8")
-
-    from app.services.opml_service import parse_opml
-    from app.services.group_service import create_group, get_groups
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("utf-8", errors="replace")
 
     opml_feeds = parse_opml(text)
 
@@ -53,7 +152,6 @@ async def import_opml(file: UploadFile = File(...), db: AsyncSession = Depends(g
 
     added = 0
     skipped = 0
-    failed = 0
 
     for opml_feed in opml_feeds:
         group_id = None
@@ -63,15 +161,14 @@ async def import_opml(file: UploadFile = File(...), db: AsyncSession = Depends(g
                 group_map[opml_feed.group] = str(new_group.id)
             group_id = group_map[opml_feed.group]
 
-        try:
-            await feed_service.create_feed(db, user_id, opml_feed.url, group_id)
-            added += 1
-        except ValueError:
+        feed = await create_feed_from_opml(db, user_id, opml_feed, group_id)
+        if feed is None:
             skipped += 1
-        except Exception:
-            failed += 1
+        else:
+            added += 1
 
-    return {"added": added, "skipped": skipped, "failed": failed}
+    await db.commit()
+    return {"added": added, "skipped": skipped, "failed": 0}
 
 
 @router.post("", response_model=FeedResponse, status_code=201)

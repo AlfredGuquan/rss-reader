@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, FileUp, FolderPlus, Rss, Mail } from 'lucide-react';
+import { Plus, FileUp, FileDown, FolderPlus, Rss, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import { AddFeedDialog } from '@/components/feed-management/AddFeedDialog';
 import { ImportOpmlDialog } from '@/components/feed-management/ImportOpmlDialog';
 import { CreateGroupDialog } from '@/components/group-management/CreateGroupDialog';
 import { ConnectEmailDialog } from '@/components/feed-management/ConnectEmailDialog';
+import { exportOpml } from '@/api/feeds';
 
 export function SidebarFooter() {
   const [addFeedOpen, setAddFeedOpen] = useState(false);
@@ -35,6 +36,10 @@ export function SidebarFooter() {
           <DropdownMenuItem onClick={() => setImportOpmlOpen(true)}>
             <FileUp />
             Import OPML
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => exportOpml()}>
+            <FileDown />
+            Export OPML
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setCreateGroupOpen(true)}>
             <FolderPlus />

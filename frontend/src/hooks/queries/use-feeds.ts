@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeeds, addFeed, deleteFeed, importOpml, updateFeed } from '@/api/feeds';
+import { getFeeds, addFeed, deleteFeed, importOpml, previewOpml, updateFeed } from '@/api/feeds';
 
 export function useFeeds() {
   return useQuery({
@@ -37,6 +37,10 @@ export function useImportOpml() {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
   });
+}
+
+export function usePreviewOpml() {
+  return useMutation({ mutationFn: previewOpml });
 }
 
 export function useUpdateFeed() {
