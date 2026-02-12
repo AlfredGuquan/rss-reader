@@ -17,6 +17,7 @@ class EntryResponse(BaseModel):
     created_at: datetime
     is_read: bool = False
     is_starred: bool = False
+    extra_metadata: Optional[dict] = None
     feed_title: Optional[str] = None
     feed_favicon_url: Optional[str] = None
 

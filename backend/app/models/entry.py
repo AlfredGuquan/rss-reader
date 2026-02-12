@@ -24,6 +24,7 @@ class Entry(Base, UUIDMixin):
     content_fetched: Mapped[bool] = mapped_column(default=False)
     published_at: Mapped[datetime] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    extra_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     feed: Mapped["Feed"] = relationship(back_populates="entries")
     user_states: Mapped[list["UserEntryState"]] = relationship(

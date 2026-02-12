@@ -36,6 +36,8 @@ class FeedResponse(BaseModel):
     error_count: int
     unread_count: int = 0
     feed_type: str = "rss"
+    source_platform: Optional[str] = None
+    source_identifier: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

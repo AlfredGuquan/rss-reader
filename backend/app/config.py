@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     google_oauth_credentials_path: str = "config/google_oauth_credentials.json"
     google_oauth_redirect_uri: str = "http://localhost:5173/oauth/callback"
+    reddit_user_agent: str = "RSS-Reader:v1.0 (by /u/rss-reader-app)"
 
     class Config:
         env_prefix = "RSS_"

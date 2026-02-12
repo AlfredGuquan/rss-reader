@@ -7,6 +7,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from app.config import settings
 from app.models.entry import Entry
 from app.models.feed import Feed
 
@@ -18,6 +19,9 @@ MAX_RETRIES = 3
 async def fetch_feed(session: AsyncSession, feed: Feed) -> int:
     """Fetch new entries for a feed with retry + exponential backoff."""
     headers = {"User-Agent": "RSS Reader/1.0"}
+
+    if getattr(feed, 'source_platform', None) == "reddit":
+        headers["User-Agent"] = settings.reddit_user_agent
     if feed.etag:
         headers["If-None-Match"] = feed.etag
     if feed.last_modified_header:

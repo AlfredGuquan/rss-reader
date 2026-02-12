@@ -11,6 +11,7 @@ from app.models.feed import Feed
 from app.models.entry import Entry
 from app.models.user_entry_state import UserEntryState
 from app.services.discovery_service import discover_feeds
+from app.services.platform_detector import detect_platform
 
 
 async def parse_feed_url(url: str) -> dict | None:
@@ -44,35 +45,49 @@ async def create_feed(
 ) -> Feed:
     uid = uuid.UUID(user_id)
 
+    # Platform detection — may transform URL to RSS feed URL
+    platform_result = await detect_platform(url)
+    actual_url = platform_result.feed_url if platform_result else url
+
     existing = await session.execute(
-        select(Feed).where(and_(Feed.user_id == uid, Feed.url == url))
+        select(Feed).where(and_(Feed.user_id == uid, Feed.url == actual_url))
     )
     if existing.scalar_one_or_none():
         raise ValueError("CONFLICT")
 
-    meta = await parse_feed_url(url)
+    meta = await parse_feed_url(actual_url)
 
-    if meta is None:
+    if meta is None and not platform_result:
         discovered = await discover_feeds(url)
         if discovered:
             meta = await parse_feed_url(discovered[0]["url"])
             if meta:
-                url = discovered[0]["url"]
+                actual_url = discovered[0]["url"]
 
-    title = meta["title"] if meta else url
+    title = meta["title"] if meta else (platform_result.title_hint if platform_result else url)
     description = meta.get("description") if meta else None
-    site_url = meta.get("site_url") if meta else None
+    site_url = meta.get("site_url") if meta else (platform_result.site_url if platform_result else None)
     favicon_url = meta.get("favicon_url") if meta else None
+
+    if platform_result and not favicon_url:
+        domain = urlparse(platform_result.site_url or url).netloc
+        favicon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
 
     feed = Feed(
         user_id=uid,
-        url=url,
+        url=actual_url,
         title=title,
         description=description,
         site_url=site_url,
         favicon_url=favicon_url,
         group_id=uuid.UUID(group_id) if group_id else None,
+        source_platform=platform_result.platform if platform_result else None,
+        source_identifier=platform_result.identifier if platform_result else None,
     )
+
+    if platform_result and platform_result.platform == "reddit":
+        feed.fetch_interval_minutes = 60
+
     session.add(feed)
     await session.commit()
     await session.refresh(feed)
