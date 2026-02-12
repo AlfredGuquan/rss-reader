@@ -12,6 +12,7 @@ class FeedUpdate(BaseModel):
     title: Optional[str] = None
     group_id: Optional[str] = None
     status: Optional[str] = None
+    fulltext_config: Optional[dict] = None
 
     @field_validator("status")
     @classmethod
@@ -36,6 +37,7 @@ class FeedResponse(BaseModel):
     error_count: int
     unread_count: int = 0
     feed_type: str = "rss"
+    fulltext_config: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

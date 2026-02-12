@@ -12,6 +12,15 @@ router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
 
 def _feed_to_response(feed, unread_count: int = 0) -> FeedResponse:
+    import json
+
+    fulltext_config = None
+    if feed.fulltext_config:
+        try:
+            fulltext_config = json.loads(feed.fulltext_config)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return FeedResponse(
         id=str(feed.id),
         user_id=str(feed.user_id),
@@ -27,6 +36,7 @@ def _feed_to_response(feed, unread_count: int = 0) -> FeedResponse:
         error_count=feed.error_count,
         unread_count=unread_count,
         feed_type=getattr(feed, 'feed_type', 'rss'),
+        fulltext_config=fulltext_config,
         created_at=feed.created_at,
         updated_at=feed.updated_at,
     )
@@ -202,7 +212,7 @@ async def get_feed(feed_id: str, db: AsyncSession = Depends(get_db)):
 @router.put("/{feed_id}", response_model=FeedResponse)
 async def update_feed(feed_id: str, data: FeedUpdate, db: AsyncSession = Depends(get_db)):
     user_id = settings.default_user_id
-    feed = await feed_service.update_feed(db, user_id, feed_id, data.title, data.group_id, data.status)
+    feed = await feed_service.update_feed(db, user_id, feed_id, data.title, data.group_id, data.status, data.fulltext_config)
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
     return _feed_to_response(feed)

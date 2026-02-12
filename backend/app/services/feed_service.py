@@ -138,6 +138,7 @@ async def update_feed(
     title: str | None = None,
     group_id: str | None = None,
     status: str | None = None,
+    fulltext_config: dict | None = None,
 ) -> Feed | None:
     feed = await get_feed(session, user_id, feed_id)
     if not feed:
@@ -152,6 +153,9 @@ async def update_feed(
         if status == "active":
             feed.error_count = 0
             feed.last_error = None
+    if fulltext_config is not None:
+        import json
+        feed.fulltext_config = json.dumps(fulltext_config) if fulltext_config else None
 
     await session.commit()
     await session.refresh(feed)

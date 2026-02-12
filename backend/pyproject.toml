@@ -8,14 +8,17 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "alembic>=1.18.3",
     "apscheduler>=3.11.2",
+    "beautifulsoup4>=4.12.0",
     "fastapi>=0.128.6",
     "feedparser>=6.0.12",
     "google-api-python-client>=2.0.0",
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
     "httpx[socks]>=0.28.1",
+    "lxml>=5.0.0",
     "pydantic-settings>=2.12.0",
     "python-multipart>=0.0.22",
+    "readability-lxml>=0.8.1",
     "sqlalchemy[asyncio]>=2.0.46",
     "trafilatura>=2.0.0",
     "uvicorn[standard]>=0.40.0",
@@ -24,6 +27,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [tool.pytest.ini_options]

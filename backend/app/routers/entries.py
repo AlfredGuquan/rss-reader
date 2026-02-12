@@ -88,6 +88,8 @@ async def list_entries(
                 summary=entry.summary,
                 content=entry.content,
                 content_fetched=entry.content_fetched,
+                content_fetch_status=getattr(entry, 'content_fetch_status', 'pending'),
+                extraction_method=getattr(entry, 'extraction_method', None),
                 published_at=entry.published_at,
                 created_at=entry.created_at,
                 is_read=is_read,
@@ -145,6 +147,8 @@ async def get_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
         summary=entry.summary,
         content=entry.content,
         content_fetched=entry.content_fetched,
+        content_fetch_status=getattr(entry, 'content_fetch_status', 'pending'),
+        extraction_method=getattr(entry, 'extraction_method', None),
         published_at=entry.published_at,
         created_at=entry.created_at,
         is_read=result["is_read"],
@@ -198,15 +202,22 @@ async def fetch_entry_content(entry_id: str, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=404, detail="Entry not found")
 
     entry = result["entry"]
-    entry.content_fetched = False
+    # Reset status for refetch
+    entry.content_fetch_status = "pending"
+    entry.content_fetch_retries = 0
+    entry.content_fetch_error = None
     await db.commit()
 
+    # Load feed for fulltext config
+    feed = await db.get(Feed, entry.feed_id)
+
     from app.services.content_service import fetch_content_for_entry
-    success = await fetch_content_for_entry(db, entry)
+    success = await fetch_content_for_entry(db, entry, feed)
 
     await db.refresh(entry)
     return {
         "success": success,
         "content_fetched": entry.content_fetched,
         "has_content": entry.content is not None,
+        "extraction_method": entry.extraction_method,
     }

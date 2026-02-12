@@ -13,6 +13,8 @@ class EntryResponse(BaseModel):
     summary: Optional[str] = None
     content: Optional[str] = None
     content_fetched: bool
+    content_fetch_status: str = "pending"
+    extraction_method: Optional[str] = None
     published_at: datetime
     created_at: datetime
     is_read: bool = False
