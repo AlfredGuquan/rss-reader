@@ -53,6 +53,13 @@ export interface Entry {
   extra_metadata: Record<string, unknown> | null;
   feed_title?: string;
   feed_favicon_url?: string;
+  duplicate_of_id: string | null;
+  duplicate_count: number;
+  duplicate_sources: Array<{
+    feed_title: string | null;
+    feed_favicon_url: string | null;
+    published_at: string;
+  }> | null;
 }
 
 export interface PaginatedResponse<T> {

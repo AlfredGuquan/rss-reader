@@ -11,6 +11,7 @@ export function EntryList() {
   const selectedGroupId = useUIStore((s) => s.selectedGroupId);
   const entryFilter = useUIStore((s) => s.entryFilter);
   const searchQuery = useUIStore((s) => s.searchQuery);
+  const deduplicateEnabled = useUIStore((s) => s.deduplicateEnabled);
 
   const isSearching = searchQuery.length > 0;
   const hasSelection = !!(selectedFeedId || selectedGroupId);
@@ -20,6 +21,7 @@ export function EntryList() {
     group_id: selectedGroupId || undefined,
     status: entryFilter,
     per_page: 50,
+    deduplicate: deduplicateEnabled || undefined,
   });
 
   const searchResults = useSearchEntries(searchQuery);

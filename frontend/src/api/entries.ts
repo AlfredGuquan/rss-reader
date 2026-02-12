@@ -7,6 +7,7 @@ export interface GetEntriesParams {
   status?: 'all' | 'unread' | 'starred';
   page?: number;
   per_page?: number;
+  deduplicate?: boolean;
 }
 
 export function getEntries(params: GetEntriesParams): Promise<PaginatedResponse<Entry>> {
@@ -16,6 +17,7 @@ export function getEntries(params: GetEntriesParams): Promise<PaginatedResponse<
   if (params.status) searchParams.set('status', params.status);
   if (params.page) searchParams.set('page', String(params.page));
   if (params.per_page) searchParams.set('per_page', String(params.per_page));
+  if (params.deduplicate) searchParams.set('deduplicate', 'true');
   const qs = searchParams.toString();
   return apiClient.get<PaginatedResponse<Entry>>(`/entries${qs ? `?${qs}` : ''}`);
 }

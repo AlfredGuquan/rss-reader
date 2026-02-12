@@ -1,4 +1,4 @@
-import { RefreshCw, CheckCheck } from 'lucide-react';
+import { RefreshCw, CheckCheck, Layers } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/ui-store';
@@ -9,6 +9,8 @@ export function EntryFilterBar() {
   const setEntryFilter = useUIStore((s) => s.setEntryFilter);
   const selectedFeedId = useUIStore((s) => s.selectedFeedId);
   const selectedGroupId = useUIStore((s) => s.selectedGroupId);
+  const deduplicateEnabled = useUIStore((s) => s.deduplicateEnabled);
+  const setDeduplicateEnabled = useUIStore((s) => s.setDeduplicateEnabled);
   const refreshFeed = useRefreshFeed();
   const markAllRead = useMarkAllRead();
 
@@ -33,6 +35,14 @@ export function EntryFilterBar() {
           Starred
         </ToggleGroupItem>
       </ToggleGroup>
+      <Button
+        variant={deduplicateEnabled ? 'secondary' : 'ghost'}
+        size="icon-xs"
+        title="Deduplicate articles"
+        onClick={() => setDeduplicateEnabled(!deduplicateEnabled)}
+      >
+        <Layers />
+      </Button>
       <Button
         variant="ghost"
         size="icon-xs"
