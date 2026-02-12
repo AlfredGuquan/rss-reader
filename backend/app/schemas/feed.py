@@ -38,6 +38,8 @@ class FeedResponse(BaseModel):
     unread_count: int = 0
     feed_type: str = "rss"
     fulltext_config: Optional[dict] = None
+    source_platform: Optional[str] = None
+    source_identifier: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

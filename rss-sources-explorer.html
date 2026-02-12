@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSS Sources Explorer — 92 Sources Interactive Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242734;
+  --border: #2e3140;
+  --text: #e4e4e7;
+  --text-dim: #9ca3af;
+  --accent: #6366f1;
+  --accent-light: #818cf8;
+  --must: #ef4444;
+  --recommend: #3b82f6;
+  --optional: #f59e0b;
+  --skip: #6b7280;
+  --freq-high: #10b981;
+  --freq-mid: #f59e0b;
+  --freq-low: #ef4444;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+a { color: var(--accent-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.header { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); padding: 2rem 2.5rem; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: .25rem; }
+.header p { color: var(--text-dim); font-size: .95rem; }
+
+.container { max-width: 1440px; margin: 0 auto; padding: 1.5rem; }
+
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+.stat-card .num { font-size: 2rem; font-weight: 700; color: var(--accent-light); }
+.stat-card .label { font-size: .8rem; color: var(--text-dim); margin-top: .25rem; }
+
+.filters { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.filters label { font-size: .8rem; color: var(--text-dim); margin-right: .25rem; }
+.filter-group { display: flex; align-items: center; gap: .35rem; }
+select, input[type="text"] { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: .5rem .75rem; border-radius: 8px; font-size: .85rem; outline: none; }
+select:focus, input:focus { border-color: var(--accent); }
+input[type="text"] { min-width: 220px; }
+
+.insights { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+.insight-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); padding: .4rem .85rem; border-radius: 20px; font-size: .8rem; cursor: pointer; transition: all .15s; }
+.insight-btn:hover, .insight-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.chart-card h3 { font-size: .95rem; margin-bottom: .75rem; display: flex; justify-content: space-between; align-items: center; }
+.chart-toggle { display: flex; gap: 2px; }
+.chart-toggle button { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); padding: .2rem .5rem; font-size: .7rem; cursor: pointer; }
+.chart-toggle button:first-child { border-radius: 4px 0 0 4px; }
+.chart-toggle button:last-child { border-radius: 0 4px 4px 0; }
+.chart-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chart-wrap { position: relative; height: 280px; }
+
+.table-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.table-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.table-header h3 { font-size: 1rem; }
+.table-header .count { color: var(--text-dim); font-size: .85rem; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+thead { background: var(--surface2); }
+th { padding: .75rem 1rem; text-align: left; font-weight: 600; color: var(--text-dim); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; white-space: nowrap; border-bottom: 1px solid var(--border); }
+th:hover { color: var(--accent-light); }
+th .sort-arrow { margin-left: 4px; opacity: .4; }
+th.sorted .sort-arrow { opacity: 1; color: var(--accent-light); }
+td { padding: .65rem 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:hover { background: rgba(99,102,241,.06); }
+tr.top20 { border-left: 3px solid var(--accent); }
+
+.badge { display: inline-block; padding: .15rem .55rem; border-radius: 10px; font-size: .72rem; font-weight: 600; }
+.badge-must { background: rgba(239,68,68,.15); color: #fca5a5; }
+.badge-rec { background: rgba(59,130,246,.15); color: #93c5fd; }
+.badge-opt { background: rgba(245,158,11,.15); color: #fcd34d; }
+.badge-skip { background: rgba(107,114,128,.15); color: #9ca3af; }
+.badge-freq-h { background: rgba(16,185,129,.12); color: #6ee7b7; }
+.badge-freq-m { background: rgba(245,158,11,.12); color: #fcd34d; }
+.badge-freq-l { background: rgba(239,68,68,.12); color: #fca5a5; }
+.badge-know-h { background: rgba(139,92,246,.12); color: #c4b5fd; }
+.badge-know-m { background: rgba(59,130,246,.12); color: #93c5fd; }
+.badge-know-l { background: rgba(107,114,128,.12); color: #d1d5db; }
+
+.source-name { font-weight: 600; color: var(--text); }
+.source-author { color: var(--text-dim); font-size: .78rem; }
+.source-reason { color: var(--text-dim); font-size: .78rem; max-width: 320px; }
+.feed-link { font-size: .75rem; word-break: break-all; }
+.rep-work { font-size: .78rem; color: var(--text-dim); font-style: italic; }
+
+.detail-panel { display: none; position: fixed; top: 0; right: 0; width: 420px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); padding: 2rem; overflow-y: auto; z-index: 100; box-shadow: -4px 0 24px rgba(0,0,0,.4); }
+.detail-panel.open { display: block; }
+.detail-panel .close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
+.detail-panel h2 { font-size: 1.2rem; margin-bottom: .25rem; }
+.detail-panel .meta { color: var(--text-dim); font-size: .85rem; margin-bottom: 1rem; }
+.detail-field { margin-bottom: 1rem; }
+.detail-field .field-label { font-size: .75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem; }
+.detail-field .field-value { font-size: .9rem; }
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 99; }
+.overlay.open { display: block; }
+
+@media (max-width: 900px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .filters { flex-direction: column; }
+  input[type="text"] { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>RSS Sources Explorer</h1>
+  <p>92 个独立博客/Newsletter 的交互式探索仪表盘 — 按兴趣领域分类，支持多维筛选与可视化</p>
+</div>
+
+<div class="container">
+  <div class="stats-row" id="stats-row"></div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label>分类</label>
+      <select id="f-cat"><option value="">全部</option></select>
+    </div>
+    <div class="filter-group">
+      <label>推荐</label>
+      <select id="f-rec">
+        <option value="">全部</option>
+        <option value="必读">必读</option>
+        <option value="推荐">推荐</option>
+        <option value="可选">可选</option>
+        <option value="跳过">跳过</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>更新频率</label>
+      <select id="f-freq">
+        <option value="">全部</option>
+        <option value="高">高</option>
+        <option value="中">中</option>
+        <option value="低">低</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>知名度</label>
+      <select id="f-know">
+        <option value="">全部</option>
+        <option value="高">高</option>
+        <option value="中">中</option>
+        <option value="低">低</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>搜索</label>
+      <input type="text" id="f-search" placeholder="名称、作者、关键词...">
+    </div>
+    <button class="insight-btn" onclick="resetFilters()">重置</button>
+  </div>
+
+  <div class="insights" id="insights"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>
+        <span>按分类分布</span>
+        <div class="chart-toggle" data-chart="catChart">
+          <button class="active" data-type="bar">柱状</button>
+          <button data-type="pie">饼图</button>
+        </div>
+      </h3>
+      <div class="chart-wrap"><canvas id="catChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>
+        <span>推荐等级分布</span>
+        <div class="chart-toggle" data-chart="recChart">
+          <button class="active" data-type="doughnut">环形</button>
+          <button data-type="bar">柱状</button>
+        </div>
+      </h3>
+      <div class="chart-wrap"><canvas id="recChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>
+        <span>更新频率分布</span>
+        <div class="chart-toggle" data-chart="freqChart">
+          <button class="active" data-type="bar">柱状</button>
+          <button data-type="pie">饼图</button>
+        </div>
+      </h3>
+      <div class="chart-wrap"><canvas id="freqChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3><span>分类 × 推荐等级 热力图</span></h3>
+      <div class="chart-wrap"><canvas id="heatChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-header">
+      <h3>全部数据源</h3>
+      <span class="count" id="table-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-col="name" class="sorted">名称 <span class="sort-arrow">▲</span></th>
+            <th data-col="author">作者 <span class="sort-arrow">▲</span></th>
+            <th data-col="category">分类 <span class="sort-arrow">▲</span></th>
+            <th data-col="recommendation">推荐 <span class="sort-arrow">▲</span></th>
+            <th data-col="frequency">频率 <span class="sort-arrow">▲</span></th>
+            <th data-col="knowledge">知名度 <span class="sort-arrow">▲</span></th>
+            <th>代表作</th>
+            <th>推荐理由</th>
+            <th>Feed</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detail-panel">
+  <button class="close" onclick="closeDetail()">&times;</button>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+const DATA = [
+  // AI/ML/LLM
+  {name:"simonwillison.net",url:"https://simonwillison.net",author:"Simon Willison",category:"AI/ML/LLM",recommendation:"必读",frequency:"高",knowledge:"高",feedUrl:"https://simonwillison.net/atom/everything/",domain:"AI/LLM 工具开发、Python 开源",representativeWork:"Datasette 项目、prompt injection 概念",reason:"AI 工具领域最高质量的信息源之一，几乎每日更新",top20:1},
+  {name:"gwern.net",url:"https://gwern.net",author:"Gwern Branwen",category:"AI/ML/LLM",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://gwern.substack.com/feed",domain:"AI/机器学习、心理学与统计学",representativeWork:"The Scaling Hypothesis",reason:"最早预见 LLM scaling 趋势，极度严谨的长文写作",top20:4},
+  {name:"lucumr.pocoo.org",url:"https://lucumr.pocoo.org",author:"Armin Ronacher",category:"AI/ML/LLM",recommendation:"必读",frequency:"高",knowledge:"高",feedUrl:"https://lucumr.pocoo.org/feed.atom",domain:"Python/Rust/Go、AI Agents",representativeWork:"A Year Of Vibes、Agent Psychosis",reason:"Flask 创造者审视 AI Agent 编程语言设计，观点深刻",top20:8},
+  {name:"dwarkesh.com",url:"https://www.dwarkesh.com",author:"Dwarkesh Patel",category:"AI/ML/LLM",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://www.dwarkesh.com/feed",domain:"AI 与 AGI、科技趋势",representativeWork:"对 Dario Amodei / Ilya Sutskever 的深度访谈",reason:"TIME 百大 AI 影响力人物，高密度信息分析",top20:9},
+  {name:"geoffreylitt.com",url:"https://www.geoffreylitt.com",author:"Geoffrey Litt",category:"AI/ML/LLM",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://www.geoffreylitt.com/feed.xml",domain:"人机交互、AI 辅助编程、可塑软件",representativeWork:"Malleable software in the age of LLMs",reason:"学术与工业界双重影响力，AI 改变软件开发范式",top20:10},
+  {name:"garymarcus.substack.com",url:"https://garymarcus.substack.com",author:"Gary Marcus",category:"AI/ML/LLM",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://garymarcus.substack.com/feed",domain:"AI 批评与分析、认知科学",representativeWork:"LLMs don't do formal reasoning",reason:"AI 领域最具影响力的批评声音，98K+ 订阅者",top20:17},
+  {name:"gilesthomas.com",url:"https://gilesthomas.com",author:"Giles Thomas",category:"AI/ML/LLM",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://gilesthomas.com/feed/rss.xml",domain:"AI/LLM、Python、机器学习",representativeWork:"Writing an LLM from scratch 系列",reason:"从零训练 LLM 的实验系列，独特的 hands-on 视角",top20:0},
+  {name:"minimaxir.com",url:"https://minimaxir.com",author:"Max Woolf",category:"AI/ML/LLM",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://minimaxir.com/post/index.xml",domain:"AI/ML 实验、LLM 能力测试",representativeWork:"GPT-2 文本生成系列",reason:"实验驱动探索 AI 能力边界，实用且有趣",top20:0},
+  {name:"worksonmymachine.ai",url:"https://worksonmymachine.ai",author:"Scott Werner",category:"AI/ML/LLM",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://worksonmymachine.ai/feed",domain:"AI 与软件开发、LLM 应用实践",representativeWork:"MCP: An (Accidentally) Universal Plugin System",reason:"提出 Promptable Architecture 概念，AI 工程实践独特观点",top20:0},
+  {name:"grantslatton.com",url:"https://grantslatton.com",author:"Grant Slatton",category:"AI/ML/LLM",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://grantslatton.com/rss.xml",domain:"软件工程、AI/LLM",representativeWork:"Claude Code 深度分析",reason:"资深工程师视角审视 AI 工具对软件开发的影响",top20:0},
+  {name:"martinalderson.com",url:"https://martinalderson.com",author:"Martin Alderson",category:"AI/ML/LLM",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://martinalderson.com/feed.xml",domain:"AI 辅助开发、软件工程经济学",representativeWork:"Wall Street lost $285B because of 13 markdown files",reason:"数据驱动分析 AI 对软件行业的影响",top20:0},
+  {name:"geohot.github.io",url:"https://geohot.github.io/blog/",author:"George Hotz",category:"AI/ML/LLM",recommendation:"可选",frequency:"高",knowledge:"高",feedUrl:"https://geohot.github.io/blog/feed.xml",domain:"AI/深度学习、自动驾驶",representativeWork:"The Coming War on Car Ownership",reason:"视角极度个人化且挑衅性强",top20:0},
+
+  // 产品/创业/思考
+  {name:"paulgraham.com",url:"https://paulgraham.com",author:"Paul Graham",category:"产品/创业/思考",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"http://www.aaronsw.com/2002/feeds/pgessays.rss",domain:"创业方法论、写作与思考",representativeWork:"Founder Mode、How to Do Great Work",reason:"硅谷创业文化的思想源头，每篇文章影响力极大",top20:2},
+  {name:"steveblank.com",url:"https://steveblank.com",author:"Steve Blank",category:"产品/创业/思考",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://steveblank.com/feed/",domain:"创业方法论、国防创新",representativeWork:"The Four Steps to the Epiphany",reason:"Lean Startup 运动奠基人",top20:11},
+  {name:"overreacted.io",url:"https://overreacted.io",author:"Dan Abramov",category:"产品/创业/思考",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://overreacted.io/rss.xml",domain:"React/前端、软件设计哲学",representativeWork:"A Complete Guide to useEffect",reason:"前端领域最有影响力的思想者之一",top20:3},
+  {name:"seangoedecke.com",url:"https://seangoedecke.com",author:"Sean Goedecke",category:"产品/创业/思考",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://seangoedecke.com/rss.xml",domain:"软件工程文化、大厂方法论",representativeWork:"How I estimate work as a staff engineer",reason:"哲学思辨气质明显，对大厂工程文化解构犀利",top20:0},
+  {name:"ericmigi.com",url:"https://ericmigi.com",author:"Eric Migicovsky",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://ericmigi.com/rss.xml",domain:"硬件创业、智能手表",representativeWork:"Pebble Kickstarter 项目",reason:"YC 创始人到产品重启的真实创业日记",top20:0},
+  {name:"wheresyoured.at",url:"https://www.wheresyoured.at",author:"Ed Zitron",category:"产品/创业/思考",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://www.wheresyoured.at/rss/",domain:"科技行业批评、AI 泡沫",representativeWork:"The Rot Economy、The Man Who Killed Google Search",reason:"科技行业最犀利的批评声音，数据密集长篇调查",top20:19},
+  {name:"derekthompson.org",url:"https://www.derekthompson.org",author:"Derek Thompson",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://www.derekthompson.org/feed",domain:"科技趋势、经济与文化评论",representativeWork:"This Is How the AI Bubble Will Pop",reason:"科技、经济、文化趋势交织的长篇分析",top20:0},
+  {name:"terriblesoftware.org",url:"https://terriblesoftware.org",author:"Matheus Lima",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://terriblesoftware.org/feed/",domain:"工程管理、职业发展",representativeWork:"What Actually Makes You Senior",reason:"工程师成长和管理问题的直率观点",top20:0},
+  {name:"anildash.com",url:"https://anildash.com",author:"Anil Dash",category:"产品/创业/思考",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://anildash.com/feed.xml",domain:"科技文化批评、互联网伦理",representativeWork:"There's no such thing as 'tech'",reason:"写博客超过 25 年的科技文化标杆",top20:0},
+  {name:"herman.bearblog.dev",url:"https://herman.bearblog.dev",author:"Herman Martinus",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://herman.bearblog.dev/feed/",domain:"独立开发、极简主义",representativeWork:"My product is my garden",reason:"独立开发者的极简经营哲学",top20:0},
+  {name:"joanwestenberg.com",url:"https://joanwestenberg.com",author:"Joan Westenberg",category:"产品/创业/思考",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://joanwestenberg.com/rss/",domain:"科技文化、创业与品牌",representativeWork:"The pitch deck is dead",reason:"科技创业与品牌交叉领域独特视角",top20:0},
+  {name:"refactoringenglish.com",url:"https://refactoringenglish.com",author:"Michael Lynch",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://refactoringenglish.com/index.xml",domain:"技术写作、独立创业",representativeWork:"How to Write Blog Posts that Developers Read",reason:"软件工程思维应用于写作方法论",top20:0},
+  {name:"keygen.sh",url:"https://keygen.sh/blog/",author:"Zeke Gabrielse",category:"产品/创业/思考",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://keygen.sh/blog/feed.xml",domain:"软件许可证、独立创业、SaaS",representativeWork:"Keygen is now Fair Source",reason:"独立开发者 bootstrapped 创业的真实记录",top20:0},
+
+  // 全栈/Web 开发
+  {name:"blog.jim-nielsen.com",url:"https://blog.jim-nielsen.com",author:"Jim Nielsen",category:"全栈/Web 开发",recommendation:"必读",frequency:"高",knowledge:"中",feedUrl:"https://blog.jim-nielsen.com/feed.xml",domain:"Web 设计、前端开发、用户体验",representativeWork:"Making a Website is for Everyone",reason:"20 年经验 Design Engineer，设计与代码的完美交叉",top20:13},
+  {name:"evanhahn.com",url:"https://evanhahn.com",author:"Evan Hahn",category:"全栈/Web 开发",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://evanhahn.com/feed.xml",domain:"Web 开发、JavaScript/Node.js",representativeWork:"The world's smallest PNG",reason:"轻松幽默的技术写作，好奇心驱动",top20:0},
+  {name:"miguelgrinberg.com",url:"https://blog.miguelgrinberg.com",author:"Miguel Grinberg",category:"全栈/Web 开发",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://blog.miguelgrinberg.com/feed",domain:"Python、Flask Web 开发",representativeWork:"Flask Mega-Tutorial、Flask Web Development",reason:"Python Web 开发教程的黄金标准",top20:0},
+  {name:"matduggan.com",url:"https://matduggan.com",author:"Mathew Duggan",category:"全栈/Web 开发",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://matduggan.com/rss/",domain:"DevOps 与基础设施",representativeWork:"A Eulogy for DevOps",reason:"对话式技术写作，幽默犀利",top20:0},
+  {name:"maurycyz.com",url:"https://maurycyz.com",author:"Maurycy",category:"全栈/Web 开发",recommendation:"可选",frequency:"高",knowledge:"低",feedUrl:"https://maurycyz.com/index.xml",domain:"Web 开发、天文摄影",representativeWork:"You should start a blog",reason:"独立博客精神的代表",top20:0},
+  {name:"mahadk.com",url:"https://mahadk.com",author:"Mahad Kalam",category:"全栈/Web 开发",recommendation:"可选",frequency:"低",knowledge:"低",feedUrl:"https://mahadk.com/rss.xml",domain:"Web 开发、技术评论",representativeWork:"Slack is extorting us",reason:"年轻开发者的视角，偶有犀利观察",top20:0},
+
+  // 设计/工作流
+  {name:"aresluna.org",url:"https://aresluna.org",author:"Marcin Wichary",category:"设计/工作流",recommendation:"必读",frequency:"中",knowledge:"中",feedUrl:"https://aresluna.org/main.rss",domain:"设计与排版、科技历史、键盘文化",representativeWork:"Shift Happens 键盘历史书籍",reason:"侦探式叙事与深度考据，微小设计细节变引人故事",top20:14},
+  {name:"danielwirtz.com",url:"https://danielwirtz.com",author:"Daniel Wirtz",category:"设计/工作流",recommendation:"推荐",frequency:"中",knowledge:"低",feedUrl:"https://danielwirtz.com/rss.xml",domain:"生产力工具、Web 开发、内容营销",representativeWork:"Reverse Engineering My #1 HN Article",reason:"实操导向的工具链分享，兼涉增长策略",top20:0},
+  {name:"daringfireball.net",url:"https://daringfireball.net",author:"John Gruber",category:"设计/工作流",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://daringfireball.net/feeds/main",domain:"Apple 生态、科技评论、UI/UX",representativeWork:"Markdown 语言",reason:"Apple 生态圈最具影响力的独立博主",top20:0},
+  {name:"danieldelaney.net",url:"https://danieldelaney.net",author:"Daniel De Laney",category:"设计/工作流",recommendation:"可选",frequency:"低",knowledge:"低",feedUrl:"https://danieldelaney.net/feed",domain:"产品设计、开发者工具 UX",representativeWork:"Chat is a bad UI pattern for dev tools",reason:"从设计视角审视技术产品",top20:0},
+  {name:"danielchasehooper.com",url:"https://danielchasehooper.com",author:"Daniel Hooper",category:"设计/工作流",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://danielchasehooper.com/feed.xml",domain:"系统编程、开发工具、iOS/macOS",representativeWork:"Hot reloading is better than SwiftUI previews",reason:"设计工具与底层编程的独特交叉",top20:0},
+
+  // 系统/底层/DevOps
+  {name:"mitchellh.com",url:"https://mitchellh.com",author:"Mitchell Hashimoto",category:"系统/底层/DevOps",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://mitchellh.com/feed.xml",domain:"系统编程、DevOps、Zig",representativeWork:"Ghostty 终端模拟器系列",reason:"Terraform 之父的深入技术实战文章",top20:6},
+  {name:"rachelbythebay.com",url:"https://rachelbythebay.com",author:"Rachel Kroll",category:"系统/底层/DevOps",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"https://rachelbythebay.com/w/atom.xml",domain:"系统管理、SRE/运维",representativeWork:"系统故障排查系列",reason:"近 1500 篇文章，SRE 社区标杆",top20:7},
+  {name:"antirez.com",url:"https://antirez.com",author:"Salvatore Sanfilippo",category:"系统/底层/DevOps",recommendation:"必读",frequency:"中",knowledge:"高",feedUrl:"http://antirez.com/rss",domain:"系统编程、AI 辅助编程",representativeWork:"Redis 项目、Automatic programming 系列",reason:"Redis 之父对 AI 辅助编程的务实思考",top20:12},
+  {name:"devblogs.microsoft.com/oldnewthing",url:"https://devblogs.microsoft.com/oldnewthing",author:"Raymond Chen",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://devblogs.microsoft.com/oldnewthing/feed/",domain:"Windows 编程、操作系统内部",representativeWork:"The Old New Thing 同名书籍",reason:"了解 Windows 内部机制的权威来源",top20:0},
+  {name:"xeiaso.net",url:"https://xeiaso.net",author:"Xe Iaso",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://xeiaso.net/blog.rss",domain:"DevRel、云基础设施、AI/LLM",representativeWork:"Nix Flakes: an Introduction",reason:"技术深度与幽默混搭，虚拟角色对话的独特叙事",top20:0},
+  {name:"berthub.eu",url:"https://berthub.eu",author:"Bert Hubert",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://berthub.eu/articles/index.xml",domain:"DNS/网络、基因组学、欧洲数字政策",representativeWork:"Reverse Engineering the BioNTech Vaccine",reason:"技术深度与政策洞察并重，善于通俗化",top20:0},
+  {name:"beej.us",url:"https://beej.us",author:"Brian 'Beej' Hall",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"低",knowledge:"高",feedUrl:"https://beej.us/blog/rss.xml",domain:"系统编程教育、网络编程",representativeWork:"Beej's Guide to Network Programming",reason:"互联网上最知名的免费编程教程之一",top20:0},
+  {name:"tedunangst.com",url:"https://flak.tedunangst.com",author:"Ted Unangst",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://flak.tedunangst.com/rss",domain:"OpenBSD 开发、系统安全",representativeWork:"doas、signify",reason:"极简主义和实用主义的系统编程典范",top20:0},
+  {name:"michael.stapelberg.ch",url:"https://michael.stapelberg.ch",author:"Michael Stapelberg",category:"系统/底层/DevOps",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://michael.stapelberg.ch/feed.xml",domain:"Linux 系统、Go 语言、开源基础设施",representativeWork:"i3 窗口管理器",reason:"工程实践导向，详细记录问题到解决的完整过程",top20:0},
+  {name:"utcc.utoronto.ca/~cks",url:"https://utcc.utoronto.ca/~cks",author:"Chris Siebenmann",category:"系统/底层/DevOps",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://utcc.utoronto.ca/~cks/space/blog/?atom",domain:"Unix/Linux 系统管理",representativeWork:"Go 语言社区治理评论",reason:"几乎每日更新的运维日志",top20:0},
+  {name:"it-notes.dragas.net",url:"https://it-notes.dragas.net",author:"Stefano Marinelli",category:"系统/底层/DevOps",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://it-notes.dragas.net/feed.xml",domain:"FreeBSD/BSD 系统管理",representativeWork:"FreeBSD vs. SmartOS 性能对比",reason:"教程导向，注重实操和性能测试",top20:0},
+  {name:"philiplaine.com",url:"https://philiplaine.com",author:"Philip Laine",category:"系统/底层/DevOps",recommendation:"可选",frequency:"低",knowledge:"低",feedUrl:"https://philiplaine.com/index.xml",domain:"Kubernetes 与云原生",representativeWork:"Getting Forked by Microsoft",reason:"Kubernetes 镜像分发细分领域专家",top20:0},
+  {name:"jeffgeerling.com",url:"https://jeffgeerling.com",author:"Jeff Geerling",category:"系统/底层/DevOps",recommendation:"可选",frequency:"高",knowledge:"高",feedUrl:"https://jeffgeerling.com/blog.xml",domain:"Raspberry Pi、Ansible/DevOps、Maker",representativeWork:"Ansible for DevOps 一书",reason:"硬件 Maker 文化的代表，YouTube 头部技术创作者",top20:0},
+
+  // 安全
+  {name:"krebsonsecurity.com",url:"https://krebsonsecurity.com",author:"Brian Krebs",category:"安全",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://krebsonsecurity.com/feed/",domain:"网络安全调查报道",representativeWork:"Target 数据泄露独家报道",reason:"全球最具影响力的网络安全独立记者",top20:16},
+  {name:"troyhunt.com",url:"https://troyhunt.com",author:"Troy Hunt",category:"安全",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://feeds.feedburner.com/TroyHunt",domain:"网络安全、数据泄露",representativeWork:"Have I Been Pwned 项目",reason:"信息安全领域最具公众影响力的博客之一",top20:0},
+  {name:"micahflee.com",url:"https://micahflee.com",author:"Micah Lee",category:"安全",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://micahflee.com/rss/",domain:"数字安全与隐私、调查新闻",representativeWork:"Practical Defenses Against Technofascism",reason:"因协助 Snowden 泄露事件闻名",top20:0},
+  {name:"mjg59 (codon.org.uk)",url:"https://codon.org.uk/~mjg59/blog/",author:"Matthew Garrett",category:"安全",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://codon.org.uk/~mjg59/blog/post/index.xml",domain:"安全研究、固件与 Secure Boot",representativeWork:"Secure Boot 相关系列",reason:"FSF 自由软件奖得主，Secure Boot/UEFI 领域权威",top20:0},
+  {name:"brutecat.com",url:"https://brutecat.com",author:"Brutecat",category:"安全",recommendation:"推荐",frequency:"低",knowledge:"中",feedUrl:"https://brutecat.com/rss.xml",domain:"Web 安全研究、Bug Bounty",representativeWork:"Leaking the email of any YouTube user",reason:"每篇漏洞披露文章影响力都很大",top20:0},
+  {name:"timsh.org",url:"https://timsh.org",author:"Tim",category:"安全",recommendation:"推荐",frequency:"低",knowledge:"中",feedUrl:"https://timsh.org/rss/",domain:"网络安全/隐私、自托管",representativeWork:"Everyone knows your location",reason:"调查报道式安全写作，亲身实验揭露漏洞",top20:0},
+  {name:"lcamtuf.substack.com",url:"https://lcamtuf.substack.com",author:"Michal Zalewski",category:"安全",recommendation:"可选",frequency:"低",knowledge:"高",feedUrl:"https://lcamtuf.substack.com/feed",domain:"电子电路、算法科普",representativeWork:"The Tangled Web、AFL 模糊测试工具",reason:"安全界传奇人物，现主要写电子电路科普",top20:0},
+  {name:"blog.pixelmelt.dev",url:"https://blog.pixelmelt.dev",author:"Pixelmelt/Ciarán",category:"安全",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://blog.pixelmelt.dev/rss/",domain:"JavaScript 逆向、Web 安全",representativeWork:"How I Reversed Amazon's Kindle Web Obfuscation",reason:"逆向过程叙述有趣，技术深度不错",top20:0},
+
+  // 编程语言/编译器
+  {name:"matklad.github.io",url:"https://matklad.github.io",author:"Alex Kladov",category:"编程语言/编译器",recommendation:"必读",frequency:"高",knowledge:"高",feedUrl:"https://matklad.github.io/feed.xml",domain:"系统编程、Rust/Zig、编译器",representativeWork:"One Hundred Thousand Lines of Rust",reason:"rust-analyzer 创始人，第一性原理的系统设计",top20:5},
+  {name:"buttondown.com/hillelwayne",url:"https://buttondown.com/hillelwayne",author:"Hillel Wayne",category:"编程语言/编译器",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://buttondown.email/hillelwayne/rss",domain:"形式化方法、软件工程史",representativeWork:"Are We Really Engineers?",reason:"善于挑战既有共识，学术概念拉入实践视角",top20:0},
+  {name:"bernsteinbear.com",url:"https://bernsteinbear.com",author:"Max Bernstein",category:"编程语言/编译器",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://bernsteinbear.com/feed.xml",domain:"编译器、编程语言实现、JIT",representativeWork:"Compiling a Lisp 系列",reason:"编译器领域的高产作者，教学性质强",top20:0},
+  {name:"eli.thegreenplace.net",url:"https://eli.thegreenplace.net",author:"Eli Bendersky",category:"编程语言/编译器",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://eli.thegreenplace.net/feeds/all.atom.xml",domain:"编译器与解析器、Go 语言",representativeWork:"pycparser (PyPI 日下载 2000 万)",reason:"博客运营超 20 年，技术深度与可读性兼备",top20:0},
+  {name:"xania.org",url:"https://xania.org",author:"Matt Godbolt",category:"编程语言/编译器",recommendation:"推荐",frequency:"中",knowledge:"高",feedUrl:"https://xania.org/feed.atom",domain:"编译器优化、C++ 底层编程",representativeWork:"Compiler Explorer (godbolt.org)",reason:"全球 C++ 开发者的标准工具创建者",top20:0},
+  {name:"borretti.me",url:"https://borretti.me",author:"Fernando Borretti",category:"编程语言/编译器",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://borretti.me/feed.xml",domain:"编程语言设计、软件工程理论",representativeWork:"Introducing Austral",reason:"兼具工程师严谨与文学表达力",top20:0},
+  {name:"jyn.dev",url:"https://jyn.dev",author:"Jyn Nelson",category:"编程语言/编译器",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://jyn.dev/atom.xml",domain:"系统编程、Rust 语言",representativeWork:"Why is Rust's build system uniquely hard?",reason:"Rust 编译器核心开发者",top20:0},
+  {name:"chadnauseam.com",url:"https://chadnauseam.com",author:"Andre Popovitch",category:"编程语言/编译器",recommendation:"可选",frequency:"中",knowledge:"低",feedUrl:"https://chadnauseam.com/rss.xml",domain:"PL 理论 (Rust/Haskell)、游戏开发",representativeWork:"Four Issues Facing FP",reason:"PL 理论爱好者，涵盖广泛兴趣",top20:0},
+  {name:"chiark.greenend.org.uk/~sgtatham",url:"https://www.chiark.greenend.org.uk/~sgtatham",author:"Simon Tatham",category:"编程语言/编译器",recommendation:"可选",frequency:"中",knowledge:"高",feedUrl:"https://www.chiark.greenend.org.uk/~sgtatham/quasiblog/feed.xml",domain:"系统编程、数学",representativeWork:"How to Report Bugs Effectively",reason:"PuTTY 作者，学术级深度技术写作",top20:0},
+
+  // 科普/历史/文化
+  {name:"construction-physics.com",url:"https://www.construction-physics.com",author:"Brian Potter",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://www.construction-physics.com/feed",domain:"建筑技术与经济学、工业制造",representativeWork:"How to Build a $20B Semiconductor Fab",reason:"7 万+订阅，建筑与工业技术写作标杆",top20:15},
+  {name:"experimental-history.com",url:"https://www.experimental-history.com",author:"Adam Mastroianni",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://www.experimental-history.com/feed",domain:"社会心理学、人类行为",representativeWork:"Good conversations have lots of doorknobs",reason:"9 万+订阅者，幽默风趣的行为科学科普",top20:18},
+  {name:"righto.com",url:"https://righto.com",author:"Ken Shirriff",category:"科普/历史/文化",recommendation:"推荐",frequency:"低",knowledge:"高",feedUrl:"https://righto.com/feeds/posts/default",domain:"芯片逆向工程、计算机历史",representativeWork:"Bitcoin mining on a 55-year-old IBM 1401",reason:"芯片显微照片分析的标杆，学术级深度",top20:20},
+  {name:"dynomight.net",url:"https://dynomight.net",author:"匿名",category:"科普/历史/文化",recommendation:"推荐",frequency:"中",knowledge:"中",feedUrl:"https://dynomight.net/feed.xml",domain:"科学分析、统计与数据",representativeWork:"Better air quality is the easiest way not to die",reason:"从日常生活进行严谨统计分析，幽默感强",top20:0},
+  {name:"pluralistic.net",url:"https://pluralistic.net",author:"Cory Doctorow",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://pluralistic.net/feed/",domain:"数字权利、平台经济批评",representativeWork:"enshittification 概念",reason:"科技政策讨论中极具影响力，日更",top20:0},
+  {name:"computer.rip",url:"https://computer.rip",author:"J.B. Crawford",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://computer.rip/rss.xml",domain:"计算与通信历史、基础设施考古",representativeWork:"the actual osi model",reason:"从冷门话题中挖掘趣味性",top20:0},
+  {name:"entropicthoughts.com",url:"https://entropicthoughts.com",author:"Chris/kqr",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"中",feedUrl:"https://entropicthoughts.com/feed.xml",domain:"统计学与概率论、软件工程哲学",representativeWork:"Code Reviews Do Find Bugs",reason:"用具体案例讲解复杂统计概念",top20:0},
+  {name:"johndcook.com",url:"https://www.johndcook.com",author:"John D. Cook",category:"科普/历史/文化",recommendation:"推荐",frequency:"高",knowledge:"高",feedUrl:"https://www.johndcook.com/blog/feed/",domain:"应用数学、统计学",representativeWork:"3000+ 篇数学科普博文",reason:"几乎每日更新的数学科普",top20:0},
+  {name:"filfre.net",url:"https://www.filfre.net",author:"Jimmy Maher",category:"科普/历史/文化",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://www.filfre.net/feed/rss/",domain:"电子游戏历史、计算机文化史",representativeWork:"The Future Was Here: Commodore Amiga",reason:"数字文化历史学家",top20:0},
+  {name:"tedium.co",url:"https://tedium.co",author:"Ernie Smith",category:"科普/历史/文化",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://feed.tedium.co/",domain:"科技文化考古、冷门历史",representativeWork:"冷门科技历史长文",reason:"幽默轻松的冷门话题深度挖掘",top20:0},
+  {name:"abortretry.fail",url:"https://www.abortretry.fail",author:"Bradford Morgan White",category:"科普/历史/文化",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://www.abortretry.fail/feed",domain:"计算机历史、科技公司兴衰史",representativeWork:"The Rise and Fall of Silicon Graphics",reason:"叙事性强的长篇历史纪实",top20:0},
+  {name:"dfarq.homeip.net",url:"https://dfarq.homeip.net",author:"David L. Farquhar",category:"科普/历史/文化",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://dfarq.homeip.net/feed/",domain:"复古计算机、科技历史",representativeWork:"Why Pets.com failed",reason:"运营超 25 年的老牌科技博客",top20:0},
+
+  // 综合技术
+  {name:"shkspr.mobi",url:"https://shkspr.mobi",author:"Terence Eden",category:"综合技术",recommendation:"可选",frequency:"高",knowledge:"高",feedUrl:"https://shkspr.mobi/blog/feed/atom",domain:"开放标准、Web 技术、书评",representativeWork:"推动英国政府采用 ODF 格式",reason:"英国政府 W3C 代表",top20:0},
+  {name:"idiallo.com",url:"https://idiallo.com",author:"Ibrahim Diallo",category:"综合技术",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://idiallo.com/feed.xml",domain:"技术文化评论、职场",representativeWork:"Just Fired 一书",reason:"叙事驱动的技术随笔",top20:0},
+  {name:"rakhim.exotext.com",url:"https://rakhim.exotext.com",author:"Rakhim",category:"综合技术",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://rakhim.exotext.com/rss.xml",domain:"软件工程哲学、量子计算",representativeWork:"AI is not another abstraction",reason:"技术深度与哲学思辨结合",top20:0},
+  {name:"nesbitt.io",url:"https://nesbitt.io",author:"Andrew Nesbitt",category:"综合技术",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://nesbitt.io/feed.xml",domain:"包管理、开源基础设施",representativeWork:"Lockfiles Killed Vendoring",reason:"包管理与开源元数据专家",top20:0},
+  {name:"susam.net",url:"https://susam.net",author:"Susam Pal",category:"综合技术",recommendation:"可选",frequency:"高",knowledge:"中",feedUrl:"https://susam.net/feed.xml",domain:"编程与数学、Emacs/Unix",representativeWork:"Fizz Buzz in CSS",reason:"实验性与趣味性兼具",top20:0},
+  {name:"hey.paris",url:"https://hey.paris",author:"Dr Paris Buttfield-Addison",category:"综合技术",recommendation:"可选",frequency:"中",knowledge:"中",feedUrl:"https://hey.paris/index.xml",domain:"AI 治理与政策、游戏开发",representativeWork:"State of Play: AI Governance",reason:"BAFTA 获奖游戏创始人，O'Reilly 多产作者",top20:0},
+  {name:"simone.org",url:"https://simone.org",author:"Simone Salis",category:"综合技术",recommendation:"可选",frequency:"中",knowledge:"低",feedUrl:"https://simone.org/rss",domain:"技术哲学、文化批评",representativeWork:"What If We Made Advertising Illegal?",reason:"哲学思辨与个人随笔",top20:0},
+  {name:"tomrenner.com",url:"https://tomrenner.com",author:"Tom Renner",category:"综合技术",recommendation:"可选",frequency:"低",knowledge:"低",feedUrl:"https://tomrenner.com/index.xml",domain:"技术哲学、AI 批判性思考",representativeWork:"LLMs are a 400-year-long confidence trick",reason:"以哲学视角审视技术趋势",top20:0},
+
+  // 跳过
+  {name:"jayd.ml",url:"https://jayd.ml",author:"Jayden Milne",category:"综合技术",recommendation:"跳过",frequency:"低",knowledge:"低",feedUrl:"https://jayd.ml/feed.xml",domain:"软件开发、Linux",representativeWork:"Golang's encoding/XML is broken",reason:"个人独立博客，更新不定期",top20:0},
+  {name:"oldvcr.blogspot.com",url:"https://oldvcr.blogspot.com",author:"Cameron Kaiser",category:"综合技术",recommendation:"跳过",frequency:"中",knowledge:"中",feedUrl:"https://oldvcr.blogspot.com/feeds/posts/default?alt=rss",domain:"复古 Mac 硬件修复",representativeWork:"TenFourFox 浏览器项目",reason:"纯复古 Mac 硬件修复，受众极窄",top20:0},
+  {name:"bogdanthegeek.github.io",url:"https://bogdanthegeek.github.io/blog/",author:"Bogdan Ionescu",category:"综合技术",recommendation:"跳过",frequency:"中",knowledge:"中",feedUrl:"https://bogdanthegeek.github.io/blog/index.xml",domain:"嵌入式系统、硬件 Hacking",representativeWork:"Hosting a WebSite on a Disposable Vape",reason:"嵌入式硬件 Hacking，偏小众",top20:0},
+  {name:"hugotunius.se",url:"https://hugotunius.se",author:"Hugo Tunius",category:"综合技术",recommendation:"跳过",frequency:"低",knowledge:"低",feedUrl:"https://hugotunius.se/feed.xml",domain:"Rust、iOS 开发",representativeWork:"What Every Argument About Sideloading Gets Wrong",reason:"更新频率极低",top20:0},
+  {name:"downtowndougbrown.com",url:"https://downtowndougbrown.com",author:"Doug Brown",category:"综合技术",recommendation:"跳过",frequency:"低",knowledge:"中",feedUrl:"https://downtowndougbrown.com/feed/",domain:"复古计算机逆向工程",representativeWork:"Mac ROM SIMM programmer",reason:"复古 Mac 逆向工程，偏小众",top20:0},
+  {name:"fabiensanglard.net",url:"https://fabiensanglard.net",author:"Fabien Sanglard",category:"综合技术",recommendation:"跳过",frequency:"中",knowledge:"高",feedUrl:"https://fabiensanglard.net/rss.xml",domain:"游戏引擎剖析、逆向工程",representativeWork:"Game Engine Black Book: DOOM",reason:"游戏引擎逆向，对游戏引擎历史感兴趣则值得一读",top20:0},
+];
+
+const CAT_COLORS = {
+  "AI/ML/LLM": "#8b5cf6",
+  "产品/创业/思考": "#3b82f6",
+  "全栈/Web 开发": "#06b6d4",
+  "设计/工作流": "#ec4899",
+  "系统/底层/DevOps": "#10b981",
+  "安全": "#ef4444",
+  "编程语言/编译器": "#f59e0b",
+  "科普/历史/文化": "#6366f1",
+  "综合技术": "#6b7280",
+};
+const REC_COLORS = { "必读": "#ef4444", "推荐": "#3b82f6", "可选": "#f59e0b", "跳过": "#6b7280" };
+const REC_ORDER = ["必读", "推荐", "可选", "跳过"];
+const FREQ_COLORS = { "高": "#10b981", "中": "#f59e0b", "低": "#ef4444" };
+
+const INSIGHTS = [
+  { label: "Top 20 精选", fn: d => d.top20 > 0 },
+  { label: "必读源", fn: d => d.recommendation === "必读" },
+  { label: "高频 + 高知名度", fn: d => d.frequency === "高" && d.knowledge === "高" },
+  { label: "隐藏宝藏 (低知名度但推荐)", fn: d => d.knowledge === "低" && ["必读","推荐"].includes(d.recommendation) },
+  { label: "日更级别", fn: d => d.frequency === "高" },
+  { label: "安全领域", fn: d => d.category === "安全" },
+  { label: "AI 相关", fn: d => d.category === "AI/ML/LLM" || d.domain.includes("AI") },
+];
+
+let filtered = [...DATA];
+let sortCol = "name", sortAsc = true;
+let charts = {};
+let activeInsight = -1;
+
+function init() {
+  const cats = [...new Set(DATA.map(d => d.category))];
+  const catSel = document.getElementById("f-cat");
+  cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catSel.appendChild(o); });
+
+  const insBox = document.getElementById("insights");
+  INSIGHTS.forEach((ins, i) => {
+    const btn = document.createElement("button");
+    btn.className = "insight-btn";
+    btn.textContent = ins.label;
+    btn.onclick = () => toggleInsight(i);
+    btn.id = "ins-" + i;
+    insBox.appendChild(btn);
+  });
+
+  document.getElementById("f-cat").onchange = applyFilters;
+  document.getElementById("f-rec").onchange = applyFilters;
+  document.getElementById("f-freq").onchange = applyFilters;
+  document.getElementById("f-know").onchange = applyFilters;
+  document.getElementById("f-search").oninput = applyFilters;
+
+  document.querySelectorAll("th[data-col]").forEach(th => {
+    th.onclick = () => { const col = th.dataset.col; if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; } applyFilters(); };
+  });
+
+  document.querySelectorAll(".chart-toggle").forEach(tog => {
+    tog.querySelectorAll("button").forEach(btn => {
+      btn.onclick = () => {
+        tog.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const chartId = tog.dataset.chart;
+        rebuildChart(chartId, btn.dataset.type);
+      };
+    });
+  });
+
+  applyFilters();
+}
+
+function applyFilters() {
+  const cat = document.getElementById("f-cat").value;
+  const rec = document.getElementById("f-rec").value;
+  const freq = document.getElementById("f-freq").value;
+  const know = document.getElementById("f-know").value;
+  const search = document.getElementById("f-search").value.toLowerCase();
+
+  filtered = DATA.filter(d => {
+    if (cat && d.category !== cat) return false;
+    if (rec && d.recommendation !== rec) return false;
+    if (freq && d.frequency !== freq) return false;
+    if (know && d.knowledge !== know) return false;
+    if (activeInsight >= 0 && !INSIGHTS[activeInsight].fn(d)) return false;
+    if (search) {
+      const hay = (d.name + d.author + d.category + d.domain + d.representativeWork + d.reason).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  renderStats();
+  renderCharts();
+  renderTable();
+}
+
+function toggleInsight(i) {
+  if (activeInsight === i) { activeInsight = -1; document.getElementById("ins-" + i).classList.remove("active"); }
+  else { if (activeInsight >= 0) document.getElementById("ins-" + activeInsight).classList.remove("active"); activeInsight = i; document.getElementById("ins-" + i).classList.add("active"); }
+  applyFilters();
+}
+
+function resetFilters() {
+  document.getElementById("f-cat").value = "";
+  document.getElementById("f-rec").value = "";
+  document.getElementById("f-freq").value = "";
+  document.getElementById("f-know").value = "";
+  document.getElementById("f-search").value = "";
+  if (activeInsight >= 0) { document.getElementById("ins-" + activeInsight).classList.remove("active"); activeInsight = -1; }
+  applyFilters();
+}
+
+function renderStats() {
+  const stats = [
+    { num: filtered.length, label: "数据源" },
+    { num: new Set(filtered.map(d => d.category)).size, label: "分类" },
+    { num: filtered.filter(d => d.recommendation === "必读").length, label: "必读" },
+    { num: filtered.filter(d => d.recommendation === "推荐").length, label: "推荐" },
+    { num: filtered.filter(d => d.frequency === "高").length, label: "高频更新" },
+    { num: filtered.filter(d => d.knowledge === "高").length, label: "高知名度" },
+    { num: filtered.filter(d => d.top20 > 0).length, label: "Top 20" },
+  ];
+  document.getElementById("stats-row").innerHTML = stats.map(s =>
+    `<div class="stat-card"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>`
+  ).join("");
+}
+
+function count(arr, key) {
+  const m = {}; arr.forEach(d => { const v = d[key]; m[v] = (m[v]||0) + 1; }); return m;
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function renderCharts() {
+  renderCatChart();
+  renderRecChart();
+  renderFreqChart();
+  renderHeatChart();
+}
+
+function rebuildChart(id, type) {
+  if (id === "catChart") renderCatChart(type);
+  else if (id === "recChart") renderRecChart(type);
+  else if (id === "freqChart") renderFreqChart(type);
+}
+
+function renderCatChart(type) {
+  const togBtn = document.querySelector('.chart-toggle[data-chart="catChart"] button.active');
+  type = type || (togBtn ? togBtn.dataset.type : "bar");
+  destroyChart("catChart");
+  const c = count(filtered, "category");
+  const labels = Object.keys(CAT_COLORS).filter(k => c[k]);
+  const data = labels.map(l => c[l] || 0);
+  const colors = labels.map(l => CAT_COLORS[l]);
+  const ctx = document.getElementById("catChart").getContext("2d");
+
+  const cfg = {
+    type: type === "pie" ? "pie" : "bar",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: type === "pie", position: "right", labels: { color: "#9ca3af", font: { size: 11 } } } },
+      ...(type !== "pie" ? {
+        indexAxis: "y",
+        scales: {
+          x: { grid: { color: "#2e3140" }, ticks: { color: "#9ca3af" } },
+          y: { grid: { display: false }, ticks: { color: "#e4e4e7", font: { size: 11 } } }
+        }
+      } : {})
+    }
+  };
+  charts["catChart"] = new Chart(ctx, cfg);
+}
+
+function renderRecChart(type) {
+  const togBtn = document.querySelector('.chart-toggle[data-chart="recChart"] button.active');
+  type = type || (togBtn ? togBtn.dataset.type : "doughnut");
+  destroyChart("recChart");
+  const c = count(filtered, "recommendation");
+  const labels = REC_ORDER.filter(k => c[k]);
+  const data = labels.map(l => c[l] || 0);
+  const colors = labels.map(l => REC_COLORS[l]);
+  const ctx = document.getElementById("recChart").getContext("2d");
+
+  const cfg = {
+    type: type === "bar" ? "bar" : "doughnut",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: type !== "bar", position: "right", labels: { color: "#9ca3af", font: { size: 12 } } } },
+      ...(type === "bar" ? {
+        scales: {
+          x: { grid: { display: false }, ticks: { color: "#e4e4e7" } },
+          y: { grid: { color: "#2e3140" }, ticks: { color: "#9ca3af" } }
+        }
+      } : { cutout: "55%" })
+    }
+  };
+  charts["recChart"] = new Chart(ctx, cfg);
+}
+
+function renderFreqChart(type) {
+  const togBtn = document.querySelector('.chart-toggle[data-chart="freqChart"] button.active');
+  type = type || (togBtn ? togBtn.dataset.type : "bar");
+  destroyChart("freqChart");
+  const c = count(filtered, "frequency");
+  const labels = ["高","中","低"].filter(k => c[k]);
+  const data = labels.map(l => c[l] || 0);
+  const colors = labels.map(l => FREQ_COLORS[l]);
+  const ctx = document.getElementById("freqChart").getContext("2d");
+
+  const cfg = {
+    type: type === "pie" ? "pie" : "bar",
+    data: { labels: labels.map(l => l === "高" ? "高频" : l === "中" ? "中频" : "低频"), datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: type === "pie", position: "right", labels: { color: "#9ca3af", font: { size: 12 } } } },
+      ...(type !== "pie" ? {
+        scales: {
+          x: { grid: { display: false }, ticks: { color: "#e4e4e7" } },
+          y: { grid: { color: "#2e3140" }, ticks: { color: "#9ca3af" } }
+        }
+      } : {})
+    }
+  };
+  charts["freqChart"] = new Chart(ctx, cfg);
+}
+
+function renderHeatChart() {
+  destroyChart("heatChart");
+  const cats = Object.keys(CAT_COLORS);
+  const recs = REC_ORDER;
+  const matrix = [];
+  cats.forEach((cat, ci) => {
+    recs.forEach((rec, ri) => {
+      const val = filtered.filter(d => d.category === cat && d.recommendation === rec).length;
+      if (val > 0) matrix.push({ x: ri, y: ci, v: val });
+    });
+  });
+
+  const ctx = document.getElementById("heatChart").getContext("2d");
+  const maxVal = Math.max(...matrix.map(m => m.v), 1);
+
+  charts["heatChart"] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: cats,
+      datasets: recs.map((rec, ri) => ({
+        label: rec,
+        data: cats.map(cat => filtered.filter(d => d.category === cat && d.recommendation === rec).length),
+        backgroundColor: REC_COLORS[rec] + "cc",
+        borderWidth: 0,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: "y",
+      scales: {
+        x: { stacked: true, grid: { color: "#2e3140" }, ticks: { color: "#9ca3af" } },
+        y: { stacked: true, grid: { display: false }, ticks: { color: "#e4e4e7", font: { size: 10 } } }
+      },
+      plugins: { legend: { position: "top", labels: { color: "#9ca3af", font: { size: 11 }, boxWidth: 12 } } }
+    }
+  });
+}
+
+function renderTable() {
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortCol === "recommendation") {
+      const ai = REC_ORDER.indexOf(a.recommendation), bi = REC_ORDER.indexOf(b.recommendation);
+      return sortAsc ? ai - bi : bi - ai;
+    }
+    const av = a[sortCol] || "", bv = b[sortCol] || "";
+    return sortAsc ? av.localeCompare(bv, "zh") : bv.localeCompare(av, "zh");
+  });
+
+  document.getElementById("table-count").textContent = `${sorted.length} / ${DATA.length} 条`;
+
+  document.querySelectorAll("th[data-col]").forEach(th => {
+    th.classList.toggle("sorted", th.dataset.col === sortCol);
+    th.querySelector(".sort-arrow").textContent = (th.dataset.col === sortCol) ? (sortAsc ? "▲" : "▼") : "▲";
+  });
+
+  const recBadge = r => {
+    const cls = r === "必读" ? "badge-must" : r === "推荐" ? "badge-rec" : r === "可选" ? "badge-opt" : "badge-skip";
+    return `<span class="badge ${cls}">${r}</span>`;
+  };
+  const freqBadge = f => {
+    const cls = f === "高" ? "badge-freq-h" : f === "中" ? "badge-freq-m" : "badge-freq-l";
+    return `<span class="badge ${cls}">${f}</span>`;
+  };
+  const knowBadge = k => {
+    const cls = k === "高" ? "badge-know-h" : k === "中" ? "badge-know-m" : "badge-know-l";
+    return `<span class="badge ${cls}">${k}</span>`;
+  };
+
+  document.getElementById("table-body").innerHTML = sorted.map((d, i) =>
+    `<tr class="${d.top20 > 0 ? 'top20' : ''}" onclick="showDetail(${DATA.indexOf(d)})" style="cursor:pointer">
+      <td><span class="source-name">${d.name}</span>${d.top20 > 0 ? ' <span class="badge badge-must" style="font-size:.65rem">Top'+d.top20+'</span>' : ''}<br><span class="source-author">${d.author}</span></td>
+      <td><span class="source-author">${d.author}</span></td>
+      <td><span style="color:${CAT_COLORS[d.category]||'#999'}">${d.category}</span></td>
+      <td>${recBadge(d.recommendation)}</td>
+      <td>${freqBadge(d.frequency)}</td>
+      <td>${knowBadge(d.knowledge)}</td>
+      <td><span class="rep-work">${d.representativeWork}</span></td>
+      <td><span class="source-reason">${d.reason}</span></td>
+      <td><a class="feed-link" href="${d.feedUrl}" target="_blank" onclick="event.stopPropagation()">RSS</a></td>
+    </tr>`
+  ).join("");
+}
+
+function showDetail(idx) {
+  const d = DATA[idx];
+  document.getElementById("detail-content").innerHTML = `
+    <h2>${d.name} ${d.top20 > 0 ? '<span class="badge badge-must">Top ' + d.top20 + '</span>' : ''}</h2>
+    <div class="meta">${d.author}</div>
+    <div class="detail-field"><div class="field-label">博客地址</div><div class="field-value"><a href="${d.url}" target="_blank">${d.url}</a></div></div>
+    <div class="detail-field"><div class="field-label">分类</div><div class="field-value" style="color:${CAT_COLORS[d.category]}">${d.category}</div></div>
+    <div class="detail-field"><div class="field-label">推荐等级</div><div class="field-value">${d.recommendation}</div></div>
+    <div class="detail-field"><div class="field-label">更新频率</div><div class="field-value">${d.frequency}</div></div>
+    <div class="detail-field"><div class="field-label">知名度</div><div class="field-value">${d.knowledge}</div></div>
+    <div class="detail-field"><div class="field-label">领域</div><div class="field-value">${d.domain}</div></div>
+    <div class="detail-field"><div class="field-label">代表作</div><div class="field-value">${d.representativeWork}</div></div>
+    <div class="detail-field"><div class="field-label">推荐理由</div><div class="field-value">${d.reason}</div></div>
+    <div class="detail-field"><div class="field-label">Feed URL</div><div class="field-value"><a href="${d.feedUrl}" target="_blank" style="word-break:break-all">${d.feedUrl}</a></div></div>
+    <div style="margin-top:1.5rem; display:flex; gap:.75rem">
+      <a href="${d.url}" target="_blank" style="background:var(--accent);color:#fff;padding:.5rem 1rem;border-radius:8px;font-size:.85rem;display:inline-block">访问博客</a>
+      <a href="${d.feedUrl}" target="_blank" style="background:var(--surface2);color:var(--text);padding:.5rem 1rem;border-radius:8px;font-size:.85rem;display:inline-block;border:1px solid var(--border)">订阅 RSS</a>
+    </div>
+  `;
+  document.getElementById("detail-panel").classList.add("open");
+  document.getElementById("overlay").classList.add("open");
+}
+
+function closeDetail() {
+  document.getElementById("detail-panel").classList.remove("open");
+  document.getElementById("overlay").classList.remove("open");
+}
+
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+init();
+</script>
+</body>
+</html>

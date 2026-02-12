@@ -37,6 +37,8 @@ def _feed_to_response(feed, unread_count: int = 0) -> FeedResponse:
         unread_count=unread_count,
         feed_type=getattr(feed, 'feed_type', 'rss'),
         fulltext_config=fulltext_config,
+        source_platform=getattr(feed, 'source_platform', None),
+        source_identifier=getattr(feed, 'source_identifier', None),
         created_at=feed.created_at,
         updated_at=feed.updated_at,
     )

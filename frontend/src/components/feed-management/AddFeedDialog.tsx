@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useAddFeed } from '@/hooks/queries/use-feeds';
 import { useUIStore } from '@/stores/ui-store';
 import { discoverFeeds, type DiscoveredFeed } from '@/api/feeds';
-import { Loader2, Rss } from 'lucide-react';
+import { Loader2, Rss, MessageSquare, Play } from 'lucide-react';
 
 interface AddFeedDialogProps {
   open: boolean;
@@ -34,12 +34,31 @@ export function AddFeedDialog({ open, onOpenChange }: AddFeedDialogProps) {
     addFeed.reset();
   }
 
+  function detectPlatformFromUrl(testUrl: string): 'reddit' | 'youtube' | null {
+    try {
+      const parsed = new URL(testUrl.startsWith('http') ? testUrl : `https://${testUrl}`);
+      if (['www.reddit.com', 'reddit.com', 'old.reddit.com'].includes(parsed.hostname)) {
+        return 'reddit';
+      }
+      if (['www.youtube.com', 'youtube.com', 'm.youtube.com'].includes(parsed.hostname)) {
+        return 'youtube';
+      }
+    } catch {
+      // invalid URL, ignore
+    }
+    return null;
+  }
+
   function looksLikeFeedUrl(testUrl: string): boolean {
     const lower = testUrl.toLowerCase();
-    return /\.(xml|rss|atom)(\?|$)/.test(lower)
+    if (/\.(xml|rss|atom)(\?|$)/.test(lower)
       || lower.includes('/feed')
       || lower.includes('/rss')
-      || lower.includes('/atom');
+      || lower.includes('/atom')) {
+      return true;
+    }
+    if (detectPlatformFromUrl(testUrl)) return true;
+    return false;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -88,6 +107,7 @@ export function AddFeedDialog({ open, onOpenChange }: AddFeedDialogProps) {
     onOpenChange(val);
   }
 
+  const detectedPlatform = url.trim() ? detectPlatformFromUrl(url.trim()) : null;
   const isPending = addFeed.isPending || isDiscovering;
 
   return (
@@ -142,6 +162,17 @@ export function AddFeedDialog({ open, onOpenChange }: AddFeedDialogProps) {
                 disabled={isPending}
                 autoFocus
               />
+              {detectedPlatform && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  {detectedPlatform === 'reddit' && <MessageSquare className="size-4" />}
+                  {detectedPlatform === 'youtube' && <Play className="size-4" />}
+                  <span>
+                    {detectedPlatform === 'reddit'
+                      ? 'Reddit feed detected — will convert to RSS automatically'
+                      : 'YouTube channel detected — will subscribe via RSS feed'}
+                  </span>
+                </div>
+              )}
               {addFeed.isError && (
                 <p className="mt-2 text-sm text-destructive">
                   {addFeed.error.message}

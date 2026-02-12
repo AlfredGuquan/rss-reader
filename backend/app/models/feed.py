@@ -30,6 +30,9 @@ class Feed(Base, UUIDMixin, TimestampMixin):
     feed_type: Mapped[str] = mapped_column(String, default="rss", server_default="rss")
     email_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("email_accounts.id"), nullable=True)
     fulltext_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_platform: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    source_identifier: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    filter_rules: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="feeds")
     group: Mapped[Optional["Group"]] = relationship(back_populates="feeds")
