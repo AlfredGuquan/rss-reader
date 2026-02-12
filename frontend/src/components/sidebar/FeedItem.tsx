@@ -47,10 +47,10 @@ export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) 
         <FeedIcon className={cn('h-4 w-4 shrink-0 text-muted-foreground', feed.favicon_url && 'hidden')} />
         <span className={cn('min-w-0 flex-1 truncate', feed.status === 'paused' && 'opacity-60')}>{feed.title}</span>
         {feed.status === 'error' && (
-          <AlertTriangle className="size-3.5 shrink-0 text-orange-500" title={`Feed has errors (${feed.error_count} failures)`} />
+          <span title={`Feed has errors (${feed.error_count} failures)`}><AlertTriangle className="size-3.5 shrink-0 text-orange-500" /></span>
         )}
         {feed.status === 'paused' && (
-          <PauseCircle className="size-3.5 shrink-0 text-muted-foreground" title="Feed is paused" />
+          <span title="Feed is paused"><PauseCircle className="size-3.5 shrink-0 text-muted-foreground" /></span>
         )}
         {feed.unread_count > 0 && (
           <Badge variant="secondary" className="ml-auto h-5 min-w-5 justify-center px-1 text-xs">

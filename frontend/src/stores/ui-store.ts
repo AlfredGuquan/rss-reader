@@ -12,6 +12,7 @@ interface UIState {
   shortcutsEnabled: boolean;
   entryIds: string[];
   searchQuery: string;
+  helpDialogOpen: boolean;
 
   setSelectedFeed: (feedId: string | null) => void;
   setSelectedGroup: (groupId: string | null) => void;
@@ -22,6 +23,7 @@ interface UIState {
   setShortcutsEnabled: (enabled: boolean) => void;
   setEntryIds: (ids: string[]) => void;
   setSearchQuery: (query: string) => void;
+  setHelpDialogOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -34,6 +36,7 @@ export const useUIStore = create<UIState>((set) => ({
   shortcutsEnabled: true,
   entryIds: [],
   searchQuery: '',
+  helpDialogOpen: false,
 
   setSelectedFeed: (feedId) =>
     set({ selectedFeedId: feedId, selectedGroupId: null, selectedEntryId: null }),
@@ -52,4 +55,5 @@ export const useUIStore = create<UIState>((set) => ({
   setShortcutsEnabled: (enabled) => set({ shortcutsEnabled: enabled }),
   setEntryIds: (ids) => set({ entryIds: ids }),
   setSearchQuery: (query) => set({ searchQuery: query, selectedEntryId: null }),
+  setHelpDialogOpen: (open) => set({ helpDialogOpen: open }),
 }));
