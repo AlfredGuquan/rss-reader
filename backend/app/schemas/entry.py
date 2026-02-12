@@ -3,6 +3,12 @@ from datetime import datetime
 from typing import Optional
 
 
+class DuplicateSource(BaseModel):
+    feed_title: Optional[str] = None
+    feed_favicon_url: Optional[str] = None
+    published_at: datetime
+
+
 class EntryResponse(BaseModel):
     id: str
     feed_id: str
@@ -22,6 +28,9 @@ class EntryResponse(BaseModel):
     extra_metadata: Optional[dict] = None
     feed_title: Optional[str] = None
     feed_favicon_url: Optional[str] = None
+    duplicate_of_id: Optional[str] = None
+    duplicate_count: int = 0
+    duplicate_sources: Optional[list[DuplicateSource]] = None
 
     class Config:
         from_attributes = True

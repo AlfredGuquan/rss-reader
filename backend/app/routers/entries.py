@@ -4,13 +4,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.config import settings
 from app.database import get_db
 from app.models.entry import Entry
 from app.models.feed import Feed
 from app.models.user_entry_state import UserEntryState
-from app.schemas.entry import EntryResponse, EntryListResponse, MarkAllReadRequest
+from app.schemas.entry import EntryResponse, EntryListResponse, MarkAllReadRequest, DuplicateSource
 from app.services import entry_service
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
@@ -21,6 +22,7 @@ async def list_entries(
     feed_id: str | None = None,
     group_id: str | None = None,
     status: str = Query(default="all", pattern="^(all|unread|starred)$"),
+    deduplicate: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -60,6 +62,9 @@ async def list_entries(
     elif status == "starred":
         base_query = base_query.where(UserEntryState.is_starred.is_(True))
 
+    if deduplicate:
+        base_query = base_query.where(Entry.duplicate_of_id.is_(None))
+
     count_query = select(func.count()).select_from(base_query.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
@@ -69,17 +74,54 @@ async def list_entries(
     items_query = base_query.order_by(Entry.published_at.desc()).offset(offset).limit(per_page)
     result = await db.execute(items_query)
 
-    items = []
+    entry_ids = []
+    rows_data = []
     for row in result.all():
+        entry = row[0]
+        rows_data.append(row)
+        entry_ids.append(entry.id)
+
+    dup_counts: dict[str, int] = {}
+    dup_sources_map: dict[str, list[DuplicateSource]] = {}
+    if deduplicate and entry_ids:
+        DupEntry = aliased(Entry)
+        DupFeed = aliased(Feed)
+        dup_query = (
+            select(
+                DupEntry.duplicate_of_id,
+                DupFeed.title,
+                DupFeed.favicon_url,
+                DupEntry.published_at,
+            )
+            .join(DupFeed, DupEntry.feed_id == DupFeed.id)
+            .where(DupEntry.duplicate_of_id.in_(entry_ids))
+        )
+        dup_result = await db.execute(dup_query)
+        for dup_of_id, dup_feed_title, dup_feed_favicon, dup_pub_at in dup_result.all():
+            key = str(dup_of_id)
+            dup_counts[key] = dup_counts.get(key, 0) + 1
+            if key not in dup_sources_map:
+                dup_sources_map[key] = []
+            dup_sources_map[key].append(
+                DuplicateSource(
+                    feed_title=dup_feed_title,
+                    feed_favicon_url=dup_feed_favicon,
+                    published_at=dup_pub_at,
+                )
+            )
+
+    items = []
+    for row in rows_data:
         entry = row[0]
         is_read = row[1] if row[1] is not None else False
         is_starred = row[2] if row[2] is not None else False
         feed_title = row[3]
         feed_favicon_url = row[4]
 
+        entry_id_str = str(entry.id)
         items.append(
             EntryResponse(
-                id=str(entry.id),
+                id=entry_id_str,
                 feed_id=str(entry.feed_id),
                 guid=entry.guid,
                 title=entry.title,
@@ -96,6 +138,9 @@ async def list_entries(
                 is_starred=is_starred,
                 feed_title=feed_title,
                 feed_favicon_url=feed_favicon_url,
+                duplicate_of_id=str(entry.duplicate_of_id) if entry.duplicate_of_id else None,
+                duplicate_count=dup_counts.get(entry_id_str, 0),
+                duplicate_sources=dup_sources_map.get(entry_id_str),
             )
         )
 
@@ -155,6 +200,7 @@ async def get_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
         is_starred=result["is_starred"],
         feed_title=result["feed_title"],
         feed_favicon_url=result["feed_favicon_url"],
+        duplicate_of_id=str(entry.duplicate_of_id) if entry.duplicate_of_id else None,
     )
 
 

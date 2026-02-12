@@ -4,12 +4,14 @@ from datetime import datetime
 
 import feedparser
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.config import settings
 from app.models.entry import Entry
 from app.models.feed import Feed
+from app.services.dedup_service import compute_simhash, find_duplicate
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,8 @@ async def fetch_feed(session: AsyncSession, feed: Feed) -> int:
         else:
             published_at = datetime.utcnow()
 
+        simhash_title = compute_simhash(title) if title else None
+
         stmt = (
             sqlite_insert(Entry)
             .values(
@@ -99,12 +103,31 @@ async def fetch_feed(session: AsyncSession, feed: Feed) -> int:
                 content=content,
                 content_fetched=False,
                 published_at=published_at,
+                simhash_title=simhash_title,
             )
             .on_conflict_do_nothing(index_elements=["feed_id", "guid"])
         )
         result = await session.execute(stmt)
         if result.rowcount > 0:
             new_count += 1
+
+            if simhash_title:
+                await session.flush()
+                entry_row = await session.execute(
+                    select(Entry).where(
+                        Entry.feed_id == feed.id, Entry.guid == guid
+                    )
+                )
+                new_entry = entry_row.scalar_one()
+                dup_id = await find_duplicate(
+                    session,
+                    new_entry.id,
+                    simhash_title,
+                    published_at,
+                    feed.id,
+                )
+                if dup_id:
+                    new_entry.duplicate_of_id = dup_id
 
     feed.last_fetched_at = datetime.utcnow()
     feed.etag = response.headers.get("ETag")
