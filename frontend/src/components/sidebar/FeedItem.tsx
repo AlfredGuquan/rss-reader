@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle, PauseCircle, PlayCircle, Mail } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Rss, AlertTriangle, PauseCircle, PlayCircle, Mail, MessageSquare, Play } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,7 +21,14 @@ export function FeedItem({ feed, isSelected, onSelect, onEdit }: FeedItemProps) 
   const deleteFeed = useDeleteFeed();
   const updateFeed = useUpdateFeed();
 
-  const FeedIcon = feed.feed_type === 'newsletter' ? Mail : Rss;
+  function getFeedIcon(f: Feed) {
+    if (f.source_platform === 'reddit') return MessageSquare;
+    if (f.source_platform === 'youtube') return Play;
+    if (f.feed_type === 'newsletter') return Mail;
+    return Rss;
+  }
+
+  const FeedIcon = getFeedIcon(feed);
 
   return (
     <div className="group/feed flex items-center">

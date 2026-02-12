@@ -13,6 +13,8 @@ export interface Feed {
   error_count: number;
   unread_count: number;
   feed_type: 'rss' | 'newsletter';
+  source_platform: 'reddit' | 'youtube' | null;
+  source_identifier: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +41,7 @@ export interface Entry {
   created_at: string;
   is_read: boolean;
   is_starred: boolean;
+  extra_metadata: Record<string, unknown> | null;
   feed_title?: string;
   feed_favicon_url?: string;
 }
