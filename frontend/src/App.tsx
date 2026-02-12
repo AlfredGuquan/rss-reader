@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HotkeysProvider } from 'react-hotkeys-hook';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -17,16 +18,18 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/oauth/callback" element={<OAuthCallback />} />
-              <Route path="*" element={<AppLayout />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <HotkeysProvider initiallyActiveScopes={['global', 'sidebar']}>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/oauth/callback" element={<OAuthCallback />} />
+                <Route path="*" element={<AppLayout />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </HotkeysProvider>
     </ThemeProvider>
   );
 }

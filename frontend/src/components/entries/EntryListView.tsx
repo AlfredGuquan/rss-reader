@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { EntryCard } from '@/components/entries/EntryCard';
+import { useUIStore } from '@/stores/ui-store';
 import type { Entry } from '@/types';
 
 interface EntryListViewProps {
@@ -9,6 +10,7 @@ interface EntryListViewProps {
 
 export function EntryListView({ entries }: EntryListViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const selectedEntryId = useUIStore((s) => s.selectedEntryId);
 
   const virtualizer = useVirtualizer({
     count: entries.length,
@@ -16,6 +18,12 @@ export function EntryListView({ entries }: EntryListViewProps) {
     estimateSize: () => 88,
     overscan: 5,
   });
+
+  useEffect(() => {
+    if (!selectedEntryId) return;
+    const idx = entries.findIndex((e) => e.id === selectedEntryId);
+    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: 'auto' });
+  }, [selectedEntryId, entries, virtualizer]);
 
   return (
     <div ref={parentRef} className="h-full overflow-auto">
