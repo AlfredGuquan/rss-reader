@@ -13,6 +13,13 @@ export interface Feed {
   error_count: number;
   unread_count: number;
   feed_type: 'rss' | 'newsletter';
+  fulltext_config: {
+    css_selector?: string;
+    css_remove?: string;
+    xpath?: string;
+    user_agent?: string;
+    extraction_mode?: 'default' | 'precision' | 'recall';
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +42,8 @@ export interface Entry {
   summary: string | null;
   content: string | null;
   content_fetched: boolean;
+  content_fetch_status: 'pending' | 'success' | 'failed' | 'permanent_failure';
+  extraction_method: string | null;
   published_at: string;
   created_at: string;
   is_read: boolean;

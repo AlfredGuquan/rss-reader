@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFeeds, addFeed, deleteFeed, importOpml, previewOpml, updateFeed } from '@/api/feeds';
+import type { Feed } from '@/types';
 
 export function useFeeds() {
   return useQuery({
@@ -51,7 +52,7 @@ export function useUpdateFeed() {
       data,
     }: {
       feedId: string;
-      data: { title?: string; group_id?: string | null; status?: 'active' | 'paused' };
+      data: { title?: string; group_id?: string | null; status?: 'active' | 'paused'; fulltext_config?: Feed['fulltext_config'] };
     }) => updateFeed(feedId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] });

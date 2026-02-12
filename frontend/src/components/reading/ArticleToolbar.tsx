@@ -29,7 +29,7 @@ export function ArticleToolbar({ entry, onToggleStar, onToggleRead }: ArticleToo
           <span className="ml-1">Original</span>
         </a>
       </Button>
-      {!entry.content && entry.url && (
+      {(!entry.content || entry.content_fetch_status === 'failed') && entry.url && (
         <Button
           variant="ghost"
           size="sm"
@@ -44,6 +44,11 @@ export function ArticleToolbar({ entry, onToggleStar, onToggleRead }: ArticleToo
           )}
           <span className="ml-1">Fetch full text</span>
         </Button>
+      )}
+      {entry.content && entry.extraction_method && (
+        <span className="text-xs text-muted-foreground ml-1">
+          via {entry.extraction_method}
+        </span>
       )}
     </div>
   );
